@@ -392,7 +392,10 @@
       const ta = h("textarea", { id: "cText", rows: pref === "voice" ? "3" : "5", maxlength: "1500", placeholder: "Say or type it all in one go. For example: send the proposal at 10 for an hour, call the printer at 3pm, review the week." });
       const note = h("p", { class: "status", role: "status" }, "");
       let listening = false, baseText = "";
-      const mic = h("button", { type: "button", class: "mic" + (pref === "voice" ? " big" : "") }, "Speak");
+      const MIC = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22M8.5 22h7"/></svg>';
+      const mic = h("button", { type: "button", class: "mic" + (pref === "voice" ? " big" : ""), "aria-label": "Speak" });
+      const setMic = on => { mic.innerHTML = MIC + '<span>' + (on ? "Listening… tap to stop" : "Tap to speak") + '</span>'; mic.classList.toggle("on", on); };
+      setMic(false);
       const next = h("button", { class: "btn", type: "button", disabled: true }, "Next");
       const check = () => { next.disabled = !ta.value.trim(); };
       ta.addEventListener("input", check);
@@ -405,16 +408,20 @@
           rec.onresult = e => {
             // Android Chrome can return each phrase as a growing copy of the last ("there's", "there's something"...). Keep only the latest copy.
             const out = [];
+            const norm = s => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
             for (let i = 0; i < e.results.length; i++) {
               const t = e.results[i][0].transcript.trim(); if (!t) continue;
               const prev = out.length ? out[out.length - 1] : "";
-              if (prev && t.toLowerCase().startsWith(prev.toLowerCase())) out[out.length - 1] = t; else out.push(t);
+              const nt = norm(t), np = norm(prev);
+              if (prev && nt.startsWith(np)) out[out.length - 1] = t;
+              else if (prev && np.startsWith(nt)) { /* shorter older copy: keep the longer one */ }
+              else out.push(t);
             }
             ta.value = baseText + out.join(" "); check();
           };
           rec.onerror = e => { note.textContent = e.error === "not-allowed" || e.error === "service-not-allowed" ? "The microphone is blocked. Allow it in Chrome’s site settings, or type instead." : e.error === "no-speech" ? "Didn’t catch anything. Tap Speak and try again, or type." : "Voice stopped (" + e.error + "). Typing works fine."; };
-          rec.onend = () => { listening = false; mic.textContent = "Speak"; mic.classList.remove("on"); if (activeRec === rec) activeRec = null; };
-          rec.start(); listening = true; mic.textContent = "Listening… tap to stop"; mic.classList.add("on"); note.textContent = "";
+          rec.onend = () => { listening = false; setMic(false); if (activeRec === rec) activeRec = null; };
+          rec.start(); listening = true; setMic(true); note.textContent = "";
         } catch (e) { note.textContent = "Voice isn’t available here. Typing works fine."; }
       });
       if (!SR) { mic.hidden = true; note.textContent = "Voice isn’t available in this browser. Typing works fine."; }
@@ -655,7 +662,7 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · v3"));
+    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 7"));
     return out;
   }
 

@@ -104,18 +104,20 @@ body.lock { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .bar > i, #toast { transition: none; } }
 
 /* ---- splash (about a second, pure CSS so it can never stick) ---- */
-#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; animation: splashOut .3s ease 1.9s forwards; }
+#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; }
+#splash.go { animation: splashOut .3s ease 1.9s forwards; }
 .lg { position: relative; width: min(112vw, 520px); aspect-ratio: 560 / 340; }
 .lg img { position: absolute; inset: 0; width: 100%; height: 100%; }
+#splash:not(.go) .lg > * { visibility: hidden; }
 .lg .lc { animation: lgRise .6s cubic-bezier(.2,.8,.2,1) both; }
 .lg .ll { animation: lgIn .4s ease both; }
 .lg .l0 { animation-delay: .6s; } .lg .l1 { animation-delay: .75s; } .lg .l2 { animation-delay: .9s; } .lg .l3 { animation-delay: 1.05s; }
-.lg .sw { position: absolute; inset: 0; -webkit-mask: url(icons/splash-c.png) center / 100% 100% no-repeat; mask: url(icons/splash-c.png) center / 100% 100% no-repeat; background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.6) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat; animation: lgSweep .7s ease .5s both; }
+.lg .sw { display: none; }
 @keyframes lgRise { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes lgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes lgSweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 @keyframes splashOut { to { opacity: 0; visibility: hidden; } }
-@media (prefers-reduced-motion: reduce) { #splash { animation: splashOut .01s linear .6s forwards; } .lg .lc, .lg .ll, .lg .sw { animation: none; } .lg .sw { display: none; } }
+@media (prefers-reduced-motion: reduce) { #splash.go { animation: splashOut .01s linear .6s forwards; } .lg .lc, .lg .ll { animation: none; } }
 
 /* ---- "Get CDNC" page ---- */
 #gate { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; display: flex; }
@@ -142,7 +144,8 @@ body.gated #app, body.gated #fab, body.gated #tabs { visibility: hidden; }
 .when { font-size: 13px; color: var(--gr); font-variant-numeric: tabular-nums; font-weight: 600; }
 .homepick { display: flex; flex-direction: column; gap: 6px; }
 input[type=time], input[type=number] { font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--ln); border-radius: 8px; padding: 10px; width: 100%; min-width: 0; }
-.mic { background: transparent; color: var(--gr); border: 1px solid var(--gr); border-radius: 10px; padding: 12px 16px; min-height: 48px; font-weight: 600; }
+.mic { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: transparent; color: var(--gr); border: 1px solid var(--gr); border-radius: 999px; padding: 10px 18px; min-height: 52px; font-weight: 600; }
+.mic svg { flex: none; }
 .mic.big { font-size: 20px; min-height: 72px; background: var(--grs); } .mic.on { background: var(--gr); color: var(--bg); }
 .mic[hidden] { display: none; }
 .capbody { display: flex; flex-direction: column; gap: 14px; }
