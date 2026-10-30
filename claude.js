@@ -113,7 +113,14 @@ window.Claude = (function () {
 
   function handoffPrompt(focus) {
     return "I'm using my Cadence planner. Here's where I am. " + (focus || "Help me plan the rest of today and tell me what to do next.") +
-      "\n\n" + snapshot();
+      "\n\n" + snapshot() + syncNote();
+  }
+  function syncNote() {
+    const c = window.Sync && Sync.configured() ? Sync.cfg() : null;
+    if (!c) return "";
+    return "\n\nCadence sync: my plan is stored in my Make account, data store 'Cadence'" + (c.store ? " (ID " + c.store + ")" : "") +
+      ", record key 'state', field 'json' (JSON with ventures, tasks, updatedAt). Read it for the latest before answering. " +
+      "If I ask you to change my plan, edit that record with the Make tools: keep every existing id, give new tasks a unique id, a title, venture id, priority 1-3, day YYYY-MM-DD, done false, and set updatedAt to the current time in milliseconds. The app picks the change up next time I open it.";
   }
   function handoffUrl(focus) { return "https://claude.ai/new?q=" + encodeURIComponent(handoffPrompt(focus)); }
   function copyHandoff(focus) {
