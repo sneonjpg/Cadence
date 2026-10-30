@@ -1,5 +1,5 @@
 /* Cadence service worker: caches the app shell and fonts so it opens offline. */
-const VERSION = "cadence-v1";
+const VERSION = "cadence-v3";
 const SHELL = [
   "./", "index.html", "styles.css", "seed.js", "store.js", "claude.js", "app.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"

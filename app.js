@@ -261,7 +261,7 @@
         h("button", { class: "nav", type: "button", "aria-label": "Next week", onclick: () => { const d = parse(selected); d.setDate(d.getDate() + 7); selected = ymd(d); render(); } }, "›"))));
     out.push(coachCard());
     const dow = parse(selected).getDay();
-    if (dow === 0 || dow === 6) out.push(h("div", { class: "notice" }, "Weekend: time for you and your son. Only add something here if an idea really won’t wait."));
+    if (dow === 0 || dow === 6) out.push(h("div", { class: "notice" }, "Weekend: a lighter day. Only add something here if it really won’t wait."));
     if (selected === t) {
       const carried = tasks().filter(x => !x.done && x.day < t).sort((a, b) => a.priority - b.priority || a.day.localeCompare(b.day));
       if (carried.length) out.push(h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, "Carried over"), h("span", { class: "tier maintenance" }, carried.length + " open")), carried.map(x => taskRow(x, true))));
