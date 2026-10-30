@@ -167,3 +167,30 @@ input[type=time], input[type=number] { font-size: 16px; color: var(--ink); backg
 .fbox { margin: auto; width: 100%; max-width: 460px; padding: 32px 20px calc(32px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
 .opt { text-align: left; display: flex; flex-direction: column; gap: 2px; background: var(--sf); border: 1px solid var(--ln); border-radius: 14px; padding: 14px 16px; }
 .opt b { font-family: var(--display); font-size: 22px; color: var(--gr); } .opt span { font-size: 14px; color: var(--mu); }
+
+/* ---- Your day: rhythm, check-in, approvals ---- */
+.seg { display: flex; border: 1px solid var(--ln); border-radius: 10px; overflow: hidden; background: var(--bg); flex: 1; }
+.seg button { flex: 1; border: 0; background: transparent; padding: 10px 6px; min-height: 44px; font-size: 15px; }
+.seg button + button { border-left: 1px solid var(--ln); }
+.seg button[aria-pressed="true"] { background: var(--gr); color: var(--bg); font-weight: 600; }
+.fieldline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .fieldline .lbl { font-size: 14px; color: var(--mu); min-width: 56px; }
+.tl { display: flex; flex-direction: column; }
+.blk { display: grid; grid-template-columns: 48px minmax(0,1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--ln); } .blk:first-child { border-top: 0; }
+.blk .t { font-size: 12px; line-height: 1.5; color: var(--mu); font-variant-numeric: tabular-nums; padding-top: 3px; }
+.bk { border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bk .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; } .bk .top b { font-weight: 600; overflow-wrap: anywhere; }
+.bk.away { border: 1px solid var(--ln); color: var(--mu); background: repeating-linear-gradient(135deg, var(--ln) 0 1px, transparent 1px 8px); }
+.bk.work { background: var(--grs); }
+.bk.window { background: var(--cls); border: 1px solid var(--cl); }
+.bk.off { opacity: .5; } .bk.now { box-shadow: 0 0 0 2px var(--gr); }
+.nowpill { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: var(--gr); color: var(--bg); border-radius: 999px; padding: 1px 9px; }
+.ask2 { border-color: var(--cl); background: var(--cls); }
+.midrow { display: flex; flex-direction: column; gap: 10px; } .q2 { font-family: var(--display); font-weight: 600; font-size: 24px; line-height: 1.15; color: var(--ink); }
+.midrow .row { flex-wrap: wrap; } .midrow .row select { flex: 1 1 100%; width: 100%; min-height: 48px; } .midrow .row .btn { white-space: nowrap; }
+.task.appr { flex-direction: column; align-items: stretch; padding: 12px 14px; gap: 10px; }
+.task.appr .acts { display: flex; gap: 8px; } .task.appr .acts > * { flex: 1; }
+.title.static { font-size: 16px; overflow-wrap: anywhere; }
+.btn.sm { min-height: 42px; padding: 8px 14px; font-size: 15px; }
+.dayspick { display: flex; flex-wrap: wrap; gap: 6px; }
+.chipbtn { border: 1px solid var(--ln); background: var(--bg); border-radius: 999px; padding: 8px 12px; min-height: 40px; font-size: 14px; }
+.chipbtn[aria-pressed="true"] { background: var(--gr); border-color: var(--gr); color: var(--bg); }

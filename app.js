@@ -137,6 +137,7 @@
       const home = homePicker("aVen"), pri = prioSelect("aPri", null);
       const day = h("input", { type: "date", id: "aDay", value: selected, required: true });
       const st = h("input", { type: "time", id: "aStart" }), len = lenSelect("aLen", 0);
+      const appr = h("input", { type: "checkbox", id: "aAppr" });
       const go = h("button", { class: "btn", type: "submit", disabled: true }, "Add task");
       const status = h("p", { class: "status" }, "A name, a priority and where it belongs are needed. The time is up to you.");
       const check = () => { go.disabled = !(title.value.trim() && pri.value && home.valid()); };
@@ -144,7 +145,7 @@
       const form = h("form", { onsubmit: e => {
         e.preventDefault(); check(); if (go.disabled) return;
         newCache = {};
-        const task = Store.addTask({ title: title.value.trim(), venture: home.resolve(), priority: Number(pri.value), day: day.value || selected, start: st.value, mins: Number(len.value) });
+        const task = Store.addTask({ title: title.value.trim(), venture: home.resolve(), priority: Number(pri.value), day: day.value || selected, start: st.value, mins: Number(len.value), needsApproval: appr.checked });
         if (!task) return;
         selected = task.day; closeSheet(); toast("Added.");
         speak(`Added a task: "${task.title}" (P${task.priority}, ${vname(task.venture)}) for ${longDay(task.day)}` + (timeLabel(task) ? `, ${timeLabel(task)}` : "") + ".");
@@ -156,6 +157,7 @@
           h("label", { for: "aVen" }, "Where it belongs (needed)", home.el),
           h("label", { class: "full", for: "aDay" }, "Day", day),
           h("label", { for: "aStart" }, "Start time (optional)", st), h("label", { for: "aLen" }, "How long (optional)", len)),
+        h("div", { class: "switch" }, h("label", { for: "aAppr", style: "color:var(--ink);font-size:16px" }, "Needs my OK before it counts as done"), appr),
         status, go);
       sheet.append(form);
     });
@@ -168,6 +170,7 @@
       const ven = ventureOptions("eVen", t.venture), pri = prioSelect("ePri", t.priority);
       const day = h("input", { type: "date", id: "eDay", value: t.day, required: true });
       const st = h("input", { type: "time", id: "eStart", value: t.start || "" }), len = lenSelect("eLen", t.mins);
+      const appr = h("input", { type: "checkbox", id: "eAppr" }); appr.checked = !!t.needsApproval;
       const rm = h("button", { type: "button", class: "link warn", onclick: () => {
         if (rm.dataset.armed) { Store.deleteTask(id); confirmId = null; closeSheet(); toast("Task removed."); }
         else { rm.dataset.armed = "1"; rm.textContent = "Tap again to remove"; }
@@ -175,7 +178,7 @@
       const form = h("form", { onsubmit: e => {
         e.preventDefault();
         const nt = title.value.trim(); if (!nt) return;
-        Store.updateTask(id, { title: nt, venture: ven.value, priority: Number(pri.value), day: day.value || t.day, start: st.value, mins: Number(len.value) });
+        Store.updateTask(id, { title: nt, venture: ven.value, priority: Number(pri.value), day: day.value || t.day, start: st.value, mins: Number(len.value), needsApproval: appr.checked });
         closeSheet(); toast("Saved.");
       } },
         h("div", { class: "ghead" }, h("h2", null, "Edit task"), h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => closeSheet() }, "×")),
@@ -184,6 +187,7 @@
           h("label", { for: "eVen" }, "Venture", ven), h("label", { for: "ePri" }, "Priority", pri),
           h("label", { class: "full", for: "eDay" }, "Day", day),
           h("label", { for: "eStart" }, "Start time (optional)", st), h("label", { for: "eLen" }, "How long (optional)", len)),
+        h("div", { class: "switch" }, h("label", { for: "eAppr", style: "color:var(--ink);font-size:16px" }, "Needs my OK before it counts as done"), appr),
         h("div", { class: "row" }, h("button", { type: "button", class: "btn ghost", onclick: () => closeSheet() }, "Cancel"), h("button", { type: "submit", class: "btn" }, "Save")),
         h("div", { class: "row", style: "align-items:center;justify-content:space-between" },
           h("button", { type: "button", class: "link", onclick: () => { closeSheet(); openChat(`Help me get started on this task: "${t.title}" (${vname(t.venture)}). Break it into small steps and tell me the first one.`); } }, "Ask Claude about this task"),
@@ -241,6 +245,8 @@
           timeLabel(t) ? h("span", { class: "when" }, timeLabel(t)) : null,
           showHome ? h("span", { class: "muted" }, vname(t.venture)) : null,
           carried ? h("span", { class: "muted" }, "From " + shortDay(t.day)) : null,
+          t.needsApproval ? h("span", { class: "tier maintenance" }, "Needs your OK") : null,
+          t.decision === "changes" && !t.done ? h("span", { class: "tier parked" }, "Changes asked") : null,
           carried ? h("button", { type: "button", class: "link", onclick: () => move(t) }, "Move to today") : null,
           confirmId === t.id ? h("button", { type: "button", class: "link warn", onclick: () => { confirmId = null; Store.deleteTask(t.id); } }, "Tap to remove") : null)),
       h("button", { type: "button", class: "x", "aria-label": "Remove " + t.title, onclick: () => { confirmId = confirmId === t.id ? null : t.id; render(); } }, "×"));
@@ -305,15 +311,18 @@
         h("button", { class: "nav", type: "button", "aria-label": "Previous week", onclick: () => { const d = parse(selected); d.setDate(d.getDate() - 7); selected = ymd(d); render(); } }, "‹"),
         strip,
         h("button", { class: "nav", type: "button", "aria-label": "Next week", onclick: () => { const d = parse(selected); d.setDate(d.getDate() + 7); selected = ymd(d); render(); } }, "›"))));
+    out.push(approvalsCard());
     if (selected >= t) out.push(askCard());
+    if (selected === t) out.push(middayCard(), checkinCard());
+    out.push(dayCard());
     out.push(coachCard());
     const open = list.filter(x => !x.done), planned = open.reduce((n, x) => n + (x.mins || 0), 0);
-    const cap = (Number(Store.getSettings().dayHours) || 6) * 60;
+    const cap = capFor(selected);
     if (planned || list.length) {
       out.push(h("section", { class: "plan" + (planned > cap ? " over" : "") },
         planned ? h("div", { class: "line" }, h("b", null, "Planned " + fmtMins(planned)), h("span", { class: "muted" }, " of " + fmtMins(cap))) : h("div", { class: "line muted" }, "No lengths set yet. Add one to a task and we’ll count the day."),
         planned ? h("div", { class: "bar" }, h("i", { style: "width:" + Math.min(100, planned / cap * 100) + "%" })) : null,
-        planned ? h("p", { class: "hint" }, planned > cap ? "That’s " + fmtMins(planned - cap) + " more than we can fit. Move something or shorten it." : fmtMins(cap - planned) + " still free.") : null,
+        planned ? h("p", { class: "hint" }, planned > cap ? "That’s " + fmtMins(planned - cap) + " more than we can fit. Move something or shorten it." : (cap - planned > 0 ? fmtMins(cap - planned) + " still free." : "Exactly full. Nothing spare.")) : null,
         h("button", { class: "link", type: "button", onclick: () => openReport(selected) }, "Day report")));
     }
     const dow = parse(selected).getDay();
@@ -332,6 +341,152 @@
     return out;
   }
 
+  /* ---------- Your day: rhythm, check-in, approvals ---------- */
+  // Time we can plan on a date: the "your time" windows in the day rhythm, else the plain hours setting.
+  function capFor(day) {
+    const c = Day.hasRhythm() ? Day.capacity(day) : 0;
+    return c || (Number(Store.getSettings().dayHours) || 6) * 60;
+  }
+  const clockNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+
+  function approvalsCard() {
+    const list = tasks().filter(x => x.needsApproval && !x.done).sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
+    if (!list.length) return null;
+    return h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, "Waiting for you"), h("span", { class: "tier maintenance" }, list.length + " to approve")),
+      list.map(t => h("div", { class: "task appr" },
+        h("div", { class: "body" }, h("span", { class: "title static" }, t.title),
+          h("div", { class: "meta" }, h("span", { class: "prio p" + t.priority }, PRIO_LABEL[t.priority]), h("span", { class: "muted" }, vname(t.venture)))),
+        h("div", { class: "acts" },
+          h("button", { type: "button", class: "btn sm", onclick: () => decide(t, "approved") }, "Approve"),
+          h("button", { type: "button", class: "btn ghost sm", onclick: () => decide(t, "changes") }, "Needs changes")))),
+      h("p", { class: "hint" }, "Approve marks it done. Needs changes keeps it open so it comes back."));
+  }
+  function decide(t, decision) {
+    const f = { needsApproval: false, decision, decidedAt: new Date().toISOString() };
+    if (decision === "approved") f.done = true;
+    Store.updateTask(t.id, f); toast(decision === "approved" ? "Approved." : "Sent back for changes.");
+    speak(`${decision === "approved" ? "Approved" : "Asked for changes on"}: "${t.title}" (P${t.priority}, ${vname(t.venture)}).`);
+  }
+
+  // Midday question: the day-to-day end time of any block marked "varies".
+  function middayCard() {
+    const day = todayStr(), hr = new Date().getHours();
+    if (hr < 12 || hr >= 21) return null;
+    const ci = Store.getCheckin(day), due = Day.flexBlocks(day).filter(b => !(ci.ends && ci.ends[b.id]));
+    if (!due.length) return null;
+    return h("section", { class: "card ask2" }, h("p", { class: "eyebrow" }, "Midday check"),
+      due.map(b => {
+        const sel = h("select", { id: "mid-" + b.id, "aria-label": "When does " + b.label + " end?" }, Day.endOptions(b).map(v => h("option", { value: v }, v)));
+        const planned = Day.endOptions(b).includes(b.end) ? b.end : Day.endOptions(b)[0]; sel.value = planned;
+        const save = v => { Store.setCheckin(day, { ends: { [b.id]: v } }); toast("Your afternoon is updated."); };
+        return h("div", { class: "midrow" }, h("label", { for: "mid-" + b.id, class: "q2" }, "When does " + b.label.toLowerCase() + " finish today?"),
+          h("div", { class: "row" }, sel, h("button", { type: "button", class: "btn", onclick: () => save(sel.value) }, "Set"), h("button", { type: "button", class: "btn ghost", onclick: () => save(planned) }, "As planned")));
+      }));
+  }
+
+  function checkinCard() {
+    const day = todayStr();
+    if (!Day.hasRhythm()) {
+      if (isFresh() && !Store.getSettings().skippedDay) return null;
+      return h("section", { class: "card" }, h("h3", null, "Shape your day"),
+        h("p", { class: "hint" }, "Tell CDNC when your day is blocked and when your time is your own. It will count what fits and warn you before you overbook."),
+        h("div", { class: "row" }, h("button", { type: "button", class: "btn", onclick: () => openBlock(null) }, "Add a block"), h("button", { type: "button", class: "btn ghost", onclick: () => { tab = "settings"; render(); } }, "More options")));
+    }
+    const ci = Store.getCheckin(day), bl = Day.blocksFor(day), optional = bl.filter(b => b.optional);
+    if (!bl.length) return null;
+    const energy = h("div", { class: "seg", role: "group", "aria-label": "Energy today" },
+      [["low", "Low"], ["steady", "Steady"], ["high", "High"]].map(o => h("button", { type: "button", "aria-pressed": String(ci.energy === o[0]), onclick: () => Store.setCheckin(day, { energy: ci.energy === o[0] ? "" : o[0] }) }, o[1])));
+    const open = tasks().filter(x => x.day === day && !x.done);
+    const longP1 = open.some(x => x.priority === 1 && (x.mins || 0) >= 60);
+    return h("section", { class: "card" }, h("div", { class: "ghead" }, h("h3", null, "Check-in"), h("span", { class: "muted small" }, "Takes ten seconds")),
+      h("div", { class: "fieldline" }, h("span", { class: "lbl" }, "Energy"), energy),
+      optional.map(b => {
+        const sw = h("input", { type: "checkbox", id: "on-" + b.id, onchange: () => Store.setCheckin(day, { on: { [b.id]: sw.checked } }) }); sw.checked = b.on;
+        return h("div", { class: "switch" }, h("label", { for: "on-" + b.id, style: "color:var(--ink);font-size:16px" }, "Use " + b.label.toLowerCase() + " (" + b.start + "–" + b.end + ")"), sw);
+      }),
+      ci.energy === "low" && longP1 ? h("p", { class: "notice small" }, "Low energy and a long P1 today. Do the smallest first step now and leave the rest.") : null);
+  }
+
+  function dayCard() {
+    const day = selected, bl = Day.blocksFor(day);
+    if (!bl.length) return null;
+    const isToday = day === todayStr(), nm = clockNow();
+    const list = tasks().filter(x => x.day === day && !x.done && x.start);
+    const cap = Day.capacity(day);
+    return h("section", { class: "card" }, h("div", { class: "ghead" }, h("h3", null, "Your day"), h("span", { class: "tier active" }, cap ? fmtMins(cap) + " of your time" : "No time of your own")),
+      h("div", { class: "tl" }, bl.map(b => {
+        const now = isToday && nm >= Day.toMin(b.start) && nm < Day.toMin(b.end);
+        const inside = b.kind === "window" && b.on ? list.filter(x => { const w = Day.windowOf(day, x); return w && w.id === b.id; }).sort((a, c) => a.start.localeCompare(c.start)) : [];
+        return h("div", { class: "blk" }, h("div", { class: "t" }, b.start, h("br"), b.end),
+          h("div", { class: "bk " + b.kind + (b.on ? "" : " off") + (now ? " now" : "") },
+            h("div", { class: "top" }, h("b", null, b.label), now ? h("span", { class: "nowpill" }, "Now") : h("span", { class: "muted small" }, b.on ? (b.kind === "window" ? fmtMins(b.mins) : Day.KIND[b.kind]) : "Off today")),
+            b.adjusted ? h("span", { class: "small muted" }, "Ends at " + b.end + " today") : null,
+            inside.map(x => h("span", { class: "small" }, x.start + " · " + x.title))));
+      })));
+  }
+
+  /* ---- Settings: build or change the day rhythm ---- */
+  const TEMPLATE = [
+    { label: "Getting ready", kind: "away", start: "06:00", end: "07:30", days: [1, 2, 3, 4, 5] },
+    { label: "Quick window", kind: "window", start: "07:30", end: "08:00", days: [1, 2, 3, 4, 5] },
+    { label: "Work", kind: "work", start: "08:00", end: "17:00", days: [1, 2, 3, 4, 5], flex: true },
+    { label: "Evening time", kind: "window", start: "20:00", end: "21:30", days: [1, 2, 3, 4, 5], optional: true }
+  ];
+  function saveBlocks(list) { Store.setRhythm(list); }
+  function openBlock(id) {
+    const cur = id ? Store.getRhythm().find(b => b.id === id) : null;
+    const b = cur || { label: "", kind: "window", start: "09:00", end: "10:00", days: [1, 2, 3, 4, 5], optional: false, flex: false };
+    let days = b.days.slice(), armed = false;
+    openSheet(sheet => {
+      const label = h("input", { type: "text", id: "bLabel", maxlength: "40", placeholder: "e.g. School run", value: b.label, autocomplete: "off" });
+      const kind = h("select", { id: "bKind" }, [["away", "Blocked: not available"], ["work", "Work"], ["window", "Your time for ventures"]].map(o => h("option", { value: o[0] }, o[1]))); kind.value = b.kind;
+      const st = h("input", { type: "time", id: "bStart", value: b.start }), en = h("input", { type: "time", id: "bEnd", value: b.end });
+      const opt = h("input", { type: "checkbox", id: "bOpt" }); opt.checked = !!b.optional;
+      const flex = h("input", { type: "checkbox", id: "bFlex" }); flex.checked = !!b.flex;
+      const dayRow = h("div", { class: "dayspick", role: "group", "aria-label": "Days" });
+      const paintDays = () => { dayRow.replaceChildren(...[1, 2, 3, 4, 5, 6, 0].map(d => h("button", { type: "button", class: "chipbtn", "aria-pressed": String(days.includes(d)), onclick: () => { days = days.includes(d) ? days.filter(x => x !== d) : days.concat(d); paintDays(); } }, Day.DOW[d]))); };
+      paintDays();
+      const optRow = h("div", { class: "switch" }, h("label", { for: "bOpt", style: "color:var(--ink);font-size:16px" }, "Optional: I switch it on each day"), opt);
+      const flexRow = h("div", { class: "switch" }, h("label", { for: "bFlex", style: "color:var(--ink);font-size:16px" }, "End time changes day to day (ask me at midday)"), flex);
+      const sync = () => { optRow.hidden = kind.value !== "window"; flexRow.hidden = kind.value === "window"; };
+      kind.addEventListener("change", sync); sync();
+      const msg = h("p", { class: "status", role: "status" }, "");
+      const rm = cur ? h("button", { type: "button", class: "link warn", onclick: () => { if (armed) { saveBlocks(Store.getRhythm().filter(x => x.id !== id)); closeSheet(); toast("Block removed."); } else { armed = true; rm.textContent = "Tap again to remove"; } } }, "Remove block…") : null;
+      const form = h("form", { onsubmit: e => {
+        e.preventDefault();
+        if (!label.value.trim()) { msg.textContent = "Give it a name."; return; }
+        if (!st.value || !en.value || en.value <= st.value) { msg.textContent = "The end has to be after the start."; return; }
+        if (!days.length) { msg.textContent = "Pick at least one day."; return; }
+        const nb = { id: cur ? cur.id : undefined, label: label.value.trim(), kind: kind.value, start: st.value, end: en.value, days, optional: kind.value === "window" && opt.checked, flex: kind.value !== "window" && flex.checked };
+        saveBlocks(cur ? Store.getRhythm().map(x => x.id === id ? nb : x) : Store.getRhythm().concat(nb));
+        closeSheet(); toast("Saved.");
+      } },
+        h("div", { class: "ghead" }, h("h2", null, cur ? "Edit block" : "Add a block"), h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => closeSheet() }, "×")),
+        h("div", { class: "fields" }, h("label", { class: "full", for: "bLabel" }, "Name", label), h("label", { class: "full", for: "bKind" }, "What it is", kind),
+          h("label", { for: "bStart" }, "From", st), h("label", { for: "bEnd" }, "To", en)),
+        h("div", { class: "fieldline" }, h("span", { class: "lbl" }, "Days"), dayRow), optRow, flexRow, msg,
+        h("div", { class: "row" }, h("button", { type: "button", class: "btn ghost", onclick: () => closeSheet() }, "Cancel"), h("button", { type: "submit", class: "btn" }, "Save")), rm);
+      sheet.append(form);
+    });
+  }
+  let dayMsg = "";
+  function rhythmCard() {
+    const bl = Store.getRhythm().slice().sort((a, b) => a.start.localeCompare(b.start));
+    const code = h("input", { type: "text", id: "dCode", placeholder: "Paste a day code", autocomplete: "off", spellcheck: "false" });
+    const daysTxt = b => b.days.length === 7 ? "Every day" : b.days.length === 5 && [1, 2, 3, 4, 5].every(d => b.days.includes(d)) ? "Mon–Fri" : [1, 2, 3, 4, 5, 6, 0].filter(d => b.days.includes(d)).map(d => Day.DOW[d]).join(" ");
+    return h("section", { class: "card" }, h("h3", null, "Your day"),
+      h("p", { class: "hint" }, bl.length ? "CDNC counts only the “your time” blocks as room for ventures. Check-ins change a day without touching these." : "Add when your day is blocked, when you work, and when your time is your own. Today then shows your day and what fits."),
+      bl.map(b => h("div", { class: "vrow" }, h("div", { class: "top" }, h("h3", null, b.label), h("span", { class: "tier " + (b.kind === "window" ? "active" : b.kind === "work" ? "maintenance" : "parked") }, Day.KIND[b.kind])),
+        h("p", null, b.start + "–" + b.end + " · " + daysTxt(b) + (b.optional ? " · optional" : "") + (b.flex ? " · end varies" : "")),
+        h("div", null, h("button", { class: "link", type: "button", onclick: () => openBlock(b.id) }, "Edit")))),
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => openBlock(null) }, "+ Add a block"),
+        bl.length ? null : h("button", { class: "btn ghost", type: "button", onclick: () => { saveBlocks(TEMPLATE); toast("Template added. Edit it to fit you."); } }, "Start from a template")),
+      bl.length ? h("button", { class: "link", type: "button", onclick: () => { try { navigator.clipboard.writeText(Day.exportCode()); dayMsg = "Day code copied."; } catch (e) { dayMsg = "Couldn’t copy."; } render(); } }, "Copy my day code") : null,
+      h("label", { for: "dCode" }, "Have a day code?", code),
+      h("button", { class: "link", type: "button", onclick: () => { try { saveBlocks(Day.parseCode(code.value)); dayMsg = "Day loaded."; } catch (e) { dayMsg = e.message; } render(); } }, "Use this code"),
+      dayMsg ? h("p", { class: "status", role: "status" }, dayMsg) : null);
+  }
+
   function askCard() {
     const t = todayStr();
     return h("button", { type: "button", class: "ask", onclick: () => openCapture(false) },
@@ -343,7 +498,7 @@
     const list = tasks().filter(x => x.day === day && !x.done);
     const timed = list.filter(x => x.start).sort((a, b) => a.start.localeCompare(b.start));
     const rest = list.filter(x => !x.start).sort((a, b) => a.priority - b.priority);
-    const planned = list.reduce((n, x) => n + (x.mins || 0), 0), cap = (Number(Store.getSettings().dayHours) || 6) * 60;
+    const planned = list.reduce((n, x) => n + (x.mins || 0), 0), cap = capFor(day);
     const line = x => (timeLabel(x) ? timeLabel(x) + " · " : "") + x.title + " (" + vname(x.venture) + ", P" + x.priority + ")";
     const text = ["CDNC day report: " + longDay(day), "", planned ? "Planned " + fmtMins(planned) + " of " + fmtMins(cap) + (planned > cap ? ", over by " + fmtMins(planned - cap) : "") : "No lengths set.", ""]
       .concat(timed.length ? ["Schedule"].concat(timed.map(x => "• " + line(x)), [""]) : [], rest.length ? ["Still to place"].concat(rest.map(x => "• " + line(x))) : []).join("\n");
@@ -618,7 +773,8 @@
         const hrs = h("input", { type: "number", id: "sHours", min: "1", max: "16", step: "0.5", value: String(s.dayHours || 6), onchange: () => { const v = Math.max(1, Math.min(16, Number(hrs.value) || 6)); Store.setSettings({ dayHours: v }); hrs.value = String(v); toast("Saved."); render(); } });
         return h("div", { class: "fields" }, h("label", { for: "sInput" }, "How I like to tell CDNC things", sel), h("label", { for: "sHours" }, "Hours we can plan in a day", hrs));
       })(),
-      h("p", { class: "hint" }, "The day report warns you when the timed tasks add up to more than this.")));
+      h("p", { class: "hint" }, "The day report warns you when the timed tasks add up to more than this. If you set up your day below, that takes over on the days it covers.")));
+    out.push(rhythmCard());
 
     // Sync with Claude (Make): hidden in this version; the sync script is not loaded.
     if (window.Sync && !(window.claude && window.claude.use)) {
@@ -678,7 +834,7 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 10"));
+    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 11"));
     return out;
   }
 
@@ -686,7 +842,7 @@
   function render() {
     const view = $("view"); view.replaceChildren();
     const parts = tab === "today" ? viewToday() : tab === "ventures" ? viewVentures() : viewSettings();
-    parts.forEach(p => view.append(p));
+    parts.filter(Boolean).forEach(p => view.append(p));
     $("fab").hidden = tab !== "today";
     document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
