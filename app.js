@@ -678,7 +678,7 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 9"));
+    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 10"));
     return out;
   }
 
