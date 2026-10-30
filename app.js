@@ -402,7 +402,16 @@
         try {
           const rec = new SR(); activeRec = rec; rec.lang = "en-ZA"; rec.interimResults = true; rec.continuous = true;
           baseText = ta.value.trim() ? ta.value.trim() + " " : "";
-          rec.onresult = e => { let t = ""; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; ta.value = baseText + t; check(); };
+          rec.onresult = e => {
+            // Android Chrome can return each phrase as a growing copy of the last ("there's", "there's something"...). Keep only the latest copy.
+            const out = [];
+            for (let i = 0; i < e.results.length; i++) {
+              const t = e.results[i][0].transcript.trim(); if (!t) continue;
+              const prev = out.length ? out[out.length - 1] : "";
+              if (prev && t.toLowerCase().startsWith(prev.toLowerCase())) out[out.length - 1] = t; else out.push(t);
+            }
+            ta.value = baseText + out.join(" "); check();
+          };
           rec.onerror = e => { note.textContent = e.error === "not-allowed" || e.error === "service-not-allowed" ? "The microphone is blocked. Allow it in Chrome’s site settings, or type instead." : e.error === "no-speech" ? "Didn’t catch anything. Tap Speak and try again, or type." : "Voice stopped (" + e.error + "). Typing works fine."; };
           rec.onend = () => { listening = false; mic.textContent = "Speak"; mic.classList.remove("on"); if (activeRec === rec) activeRec = null; };
           rec.start(); listening = true; mic.textContent = "Listening… tap to stop"; mic.classList.add("on"); note.textContent = "";

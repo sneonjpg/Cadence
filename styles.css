@@ -104,13 +104,13 @@ body.lock { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .bar > i, #toast { transition: none; } }
 
 /* ---- splash (about a second, pure CSS so it can never stick) ---- */
-#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; animation: splashOut .2s ease .8s forwards; }
+#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; animation: splashOut .3s ease 1.9s forwards; }
 .lg { position: relative; width: min(112vw, 520px); aspect-ratio: 560 / 340; }
 .lg img { position: absolute; inset: 0; width: 100%; height: 100%; }
-.lg .lc { animation: lgRise .4s cubic-bezier(.2,.8,.2,1) both; }
-.lg .ll { animation: lgIn .25s ease both; }
-.lg .l0 { animation-delay: .3s; } .lg .l1 { animation-delay: .38s; } .lg .l2 { animation-delay: .46s; } .lg .l3 { animation-delay: .54s; }
-.lg .sw { position: absolute; inset: 0; -webkit-mask: url(icons/splash-c.png) center / 100% 100% no-repeat; mask: url(icons/splash-c.png) center / 100% 100% no-repeat; background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.6) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat; animation: lgSweep .45s ease .25s both; }
+.lg .lc { animation: lgRise .6s cubic-bezier(.2,.8,.2,1) both; }
+.lg .ll { animation: lgIn .4s ease both; }
+.lg .l0 { animation-delay: .6s; } .lg .l1 { animation-delay: .75s; } .lg .l2 { animation-delay: .9s; } .lg .l3 { animation-delay: 1.05s; }
+.lg .sw { position: absolute; inset: 0; -webkit-mask: url(icons/splash-c.png) center / 100% 100% no-repeat; mask: url(icons/splash-c.png) center / 100% 100% no-repeat; background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.6) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat; animation: lgSweep .7s ease .5s both; }
 @keyframes lgRise { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes lgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes lgSweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
