@@ -20,7 +20,14 @@
 </head>
 <body>
 <div id="splash" aria-hidden="true"><div class="lg"><img class="lc" src="icons/splash-c.png" alt=""><div class="sw"></div><img class="ll l0" src="icons/splash-l0.png" alt=""><img class="ll l1" src="icons/splash-l1.png" alt=""><img class="ll l2" src="icons/splash-l2.png" alt=""><img class="ll l3" src="icons/splash-l3.png" alt=""></div></div>
-<script>(function(){var s=document.getElementById("splash"),go=function(){if(s)s.classList.add("go")},n=0,k=["splash-c","splash-l0","splash-l1","splash-l2","splash-l3"];k.forEach(function(x){var i=new Image();i.onload=i.onerror=function(){if(++n===k.length)go()};i.src="icons/"+x+".png"});setTimeout(go,1200)})()</script>
+<script>(function(){
+var d=document.documentElement,s=document.getElementById("splash");d.classList.add("booting");
+var metas=[].slice.call(document.querySelectorAll('meta[name="theme-color"]')),orig=metas.map(function(m){return m.content});metas.forEach(function(m){m.content="#1F4D3A"});
+var done=false,finish=function(){if(done)return;done=true;d.classList.remove("booting");metas.forEach(function(m,i){m.content=orig[i]})};
+var go=function(){if(s)s.classList.add("go")};
+if(s)s.addEventListener("animationend",function(e){if(e.animationName==="splashOut")finish()});
+setTimeout(finish,4200);
+var n=0,k=["splash-c","splash-l0","splash-l1","splash-l2","splash-l3"];k.forEach(function(x){var i=new Image();i.onload=i.onerror=function(){if(++n===k.length)go()};i.src="icons/"+x+".png"});setTimeout(go,1200)})()</script>
 <div id="gate" hidden></div>
 <div id="app">
   <main id="view" aria-live="polite"></main>
