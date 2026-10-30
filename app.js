@@ -399,30 +399,46 @@
       const next = h("button", { class: "btn", type: "button", disabled: true }, "Next");
       const check = () => { next.disabled = !ta.value.trim(); };
       ta.addEventListener("input", check);
-      const stopMic = () => { if (activeRec) { try { activeRec.stop(); } catch (e) {} } };
+      let wantOn = false, fatal = false, quick = 0;
+      const stopMic = () => { wantOn = false; if (activeRec) { try { activeRec.stop(); } catch (e) {} } };
+      const begin = () => {
+        const rec = new SR(); activeRec = rec; rec.lang = "en-ZA"; rec.interimResults = true; rec.continuous = true;
+        const startedAt = Date.now(); let gotSpeech = false;
+        baseText = ta.value.trim() ? ta.value.trim() + " " : "";
+        rec.onresult = e => {
+          gotSpeech = true; quick = 0;
+          // Android Chrome can return each phrase as a growing copy of the last. Keep only the latest copy.
+          const out = [];
+          const norm = s => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+          for (let i = 0; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript.trim(); if (!t) continue;
+            const prev = out.length ? out[out.length - 1] : "";
+            const nt = norm(t), np = norm(prev);
+            if (prev && nt.startsWith(np)) out[out.length - 1] = t;
+            else if (prev && np.startsWith(nt)) { /* shorter older copy: keep the longer one */ }
+            else out.push(t);
+          }
+          ta.value = baseText + out.join(" "); check();
+        };
+        rec.onerror = e => {
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") { fatal = true; note.textContent = "The microphone is blocked. Allow it in Chrome’s site settings, or type instead."; }
+          else if (e.error === "no-speech" || e.error === "aborted") { /* normal pauses: we keep listening */ }
+          else { fatal = true; note.textContent = "Voice stopped (" + e.error + "). Typing works fine."; }
+        };
+        rec.onend = () => {
+          if (activeRec === rec) activeRec = null;
+          // Chrome ends a session after every pause. While you haven't tapped stop, quietly start the next one.
+          if (!gotSpeech && Date.now() - startedAt < 2500) quick++;
+          if (wantOn && !fatal && quick < 3) { setTimeout(() => { if (wantOn && !activeRec) { try { begin(); } catch (e) { wantOn = false; listening = false; setMic(false); } } }, 120); return; }
+          if (wantOn && quick >= 3) note.textContent = "I can’t hear anything. Tap the mic to try again, or type.";
+          wantOn = false; listening = false; setMic(false);
+        };
+        rec.start();
+      };
       mic.addEventListener("click", () => {
         if (listening) { stopMic(); return; }
-        try {
-          const rec = new SR(); activeRec = rec; rec.lang = "en-ZA"; rec.interimResults = true; rec.continuous = true;
-          baseText = ta.value.trim() ? ta.value.trim() + " " : "";
-          rec.onresult = e => {
-            // Android Chrome can return each phrase as a growing copy of the last ("there's", "there's something"...). Keep only the latest copy.
-            const out = [];
-            const norm = s => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
-            for (let i = 0; i < e.results.length; i++) {
-              const t = e.results[i][0].transcript.trim(); if (!t) continue;
-              const prev = out.length ? out[out.length - 1] : "";
-              const nt = norm(t), np = norm(prev);
-              if (prev && nt.startsWith(np)) out[out.length - 1] = t;
-              else if (prev && np.startsWith(nt)) { /* shorter older copy: keep the longer one */ }
-              else out.push(t);
-            }
-            ta.value = baseText + out.join(" "); check();
-          };
-          rec.onerror = e => { note.textContent = e.error === "not-allowed" || e.error === "service-not-allowed" ? "The microphone is blocked. Allow it in Chrome’s site settings, or type instead." : e.error === "no-speech" ? "Didn’t catch anything. Tap Speak and try again, or type." : "Voice stopped (" + e.error + "). Typing works fine."; };
-          rec.onend = () => { listening = false; setMic(false); if (activeRec === rec) activeRec = null; };
-          rec.start(); listening = true; setMic(true); note.textContent = "";
-        } catch (e) { note.textContent = "Voice isn’t available here. Typing works fine."; }
+        try { fatal = false; quick = 0; wantOn = true; begin(); listening = true; setMic(true); note.textContent = ""; }
+        catch (e) { wantOn = false; note.textContent = "Voice isn’t available here. Typing works fine."; }
       });
       if (!SR) { mic.hidden = true; note.textContent = "Voice isn’t available in this browser. Typing works fine."; }
 
@@ -662,7 +678,7 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 7"));
+    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 8"));
     return out;
   }
 
