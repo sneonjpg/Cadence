@@ -35,7 +35,7 @@
   }
 
   function logo() {
-    var w = h("div", "g-logo"); var lg = h("div", "lg"); lg.innerHTML = '<img class="lc" src="icons/splash-c.png" alt="CDNC"><img class="ll l0" src="icons/splash-l0.png" alt=""><img class="ll l1" src="icons/splash-l1.png" alt=""><img class="ll l2" src="icons/splash-l2.png" alt=""><img class="ll l3" src="icons/splash-l3.png" alt="">'; w.append(lg, h("div", "g-tag", "Find your rhythm. Keep going.")); return w;
+    var w = h("div", "g-logo"); var lg = h("div", "lg"); lg.innerHTML = '<img class="lc" src="icons/splash-c.png" alt="CDNC"><img class="ll l0" src="icons/splash-l0.png" alt=""><img class="ll l1" src="icons/splash-l1.png" alt=""><img class="ll l2" src="icons/splash-l2.png" alt=""><img class="ll l3" src="icons/splash-l3.png" alt="">'; w.append(lg, (function () { var tg = h("div", "g-tag"); tg.append(document.createTextNode("Find your rhythm."), document.createElement("br"), document.createTextNode("Keep going.")); return tg; })()); return w;
   }
   function panel(kind) {
     gate.replaceChildren();
