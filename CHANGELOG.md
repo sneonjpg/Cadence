@@ -2,7 +2,7 @@
 
 Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Settings).
 
-## Update 2B: Today dashboard (build 11, on branch today-dashboard)
+## Update 2B: Today dashboard (build 11, folded into build 12)
 - Your day: set blocked time, work and "your time" blocks once (Settings → Your day). Today shows them as a timeline with the time you can plan.
 - Check-in: energy, optional blocks (e.g. an evening window) switched on per day.
 - Midday check from 12:00: when does a flexible block finish today? The afternoon rebuilds.
@@ -11,7 +11,7 @@ Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Setti
 - Capacity now counts "your time" blocks when a day shape exists; otherwise the hours setting still applies.
 - No push notifications yet (needs a free scheduler; planned).
 
-## Update 2B (in progress, not live) · build 12
+## Update 2B, step 1 (live) · build 12
 - Today is one scroll: Daily brief, Your day (approvals sit inside the blocks, clashes shown as a striped band), Progress.
 - Check-in and midday check pop in once, then leave. Needs changes takes voice or typing.
 - Five tabs: Today, Plan, Cadence button (middle), Ventures, Settings. Inbox is an icon top right with a count.
