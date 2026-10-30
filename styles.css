@@ -103,21 +103,28 @@ body.lock { overflow: hidden; }
 @media (max-width: 420px) { .fields { grid-template-columns: 1fr; } .day b { font-size: 18px; } h1 { font-size: 32px; } }
 @media (prefers-reduced-motion: reduce) { .bar > i, #toast { transition: none; } }
 
-/* ---- splash (one second, pure CSS so it can never stick) ---- */
-#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; color: #F3EEE4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; animation: splashOut .35s ease 1s forwards; }
-#splash .mk { font-family: var(--display); font-weight: 600; font-size: 56px; letter-spacing: .22em; padding-left: .22em; animation: splashIn .5s ease both; }
-#splash .tg { font-size: 14px; letter-spacing: .08em; opacity: .85; animation: splashIn .6s ease .15s both; }
-@keyframes splashIn { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+/* ---- splash (about a second, pure CSS so it can never stick) ---- */
+#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; animation: splashOut .2s ease .8s forwards; }
+.lg { position: relative; width: min(112vw, 520px); aspect-ratio: 560 / 340; }
+.lg img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lg .lc { animation: lgRise .4s cubic-bezier(.2,.8,.2,1) both; }
+.lg .ll { animation: lgIn .25s ease both; }
+.lg .l0 { animation-delay: .3s; } .lg .l1 { animation-delay: .38s; } .lg .l2 { animation-delay: .46s; } .lg .l3 { animation-delay: .54s; }
+.lg .sw { position: absolute; inset: 0; -webkit-mask: url(icons/splash-c.png) center / 100% 100% no-repeat; mask: url(icons/splash-c.png) center / 100% 100% no-repeat; background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.6) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat; animation: lgSweep .45s ease .25s both; }
+@keyframes lgRise { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes lgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes lgSweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 @keyframes splashOut { to { opacity: 0; visibility: hidden; } }
-@media (prefers-reduced-motion: reduce) { #splash { animation: splashOut .01s linear .6s forwards; } #splash .mk, #splash .tg { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #splash { animation: splashOut .01s linear .6s forwards; } .lg .lc, .lg .ll, .lg .sw { animation: none; } .lg .sw { display: none; } }
 
 /* ---- "Get CDNC" page ---- */
 #gate { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; display: flex; }
 #gate[hidden] { display: none; }
 body.gated #app, body.gated #fab, body.gated #tabs { visibility: hidden; }
 .g-box { margin: auto; width: 100%; max-width: 420px; padding: 32px 24px calc(32px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 36px; text-align: center; }
-.g-mark { font-family: var(--display); font-weight: 600; font-size: 52px; letter-spacing: .22em; padding-left: .22em; color: var(--gr); line-height: 1; }
-.g-tag { margin-top: 10px; color: var(--mu); font-size: 15px; }
+.g-logo { width: 100%; background: #1F4D3A; border-radius: 22px; padding: 6px 0 22px; display: flex; flex-direction: column; align-items: center; }
+.g-logo .lg { width: 100%; }
+.g-tag { margin-top: -26px; color: #F3EEE4; opacity: .85; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
 .g-main { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .g-btn { display: block; width: 100%; font-weight: 600; text-align: center; text-decoration: none; background: var(--gr); color: var(--bg); border: none; border-radius: 12px; padding: 16px; font-size: 18px; min-height: 56px; }
 .g-link { background: none; border: none; color: var(--gr); text-decoration: underline; font-size: 15px; padding: 10px; min-height: 44px; }
