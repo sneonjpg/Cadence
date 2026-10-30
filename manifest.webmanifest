@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Cadence",
-  "short_name": "Cadence",
+  "name": "CDNC",
+  "short_name": "CDNC",
   "description": "A calm daily planner for your tasks and ventures, with Claude beside you.",
   "start_url": "./index.html",
   "scope": "./",

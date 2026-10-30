@@ -1,8 +1,8 @@
 /* Cadence service worker: caches the app shell and fonts so it opens offline. */
-const VERSION = "cadence-v3";
+const VERSION = "cadence-v5";
 const SHELL = [
-  "./", "index.html", "styles.css", "seed.js", "store.js", "claude.js", "app.js",
-  "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"
+  "./", "index.html", "styles.css", "seed.js", "store.js", "welcome.js", "claude.js", "app.js",
+  "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png", "icons/qr.svg", "icons/splash-c.png", "icons/splash-l0.png", "icons/splash-l1.png", "icons/splash-l2.png", "icons/splash-l3.png"
 ];
 
 self.addEventListener("install", e => {

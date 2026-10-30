@@ -6,7 +6,7 @@ window.Store = (function () {
   const subs = new Set();
   let state = null;
   let storageOk = true;
-  let syncHook = null; // set by the app when cloud sync is available (see app.js)
+  const syncHooks = []; // cloud-sync listeners (artifact db in app.js, Make sync in sync.js)
 
   const clone = x => JSON.parse(JSON.stringify(x));
   const uid = () => "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -22,6 +22,8 @@ window.Store = (function () {
       venture: t.venture || "other",
       priority: [1, 2, 3].includes(Number(t.priority)) ? Number(t.priority) : 2,
       day: /^\d{4}-\d{2}-\d{2}$/.test(t.day) ? t.day : todayStr(),
+      start: /^([01]\d|2[0-3]):[0-5]\d$/.test(t.start || "") ? t.start : "",
+      mins: Math.max(0, Math.min(960, Math.round(Number(t.mins) || 0))),
       done: !!t.done, doneAt: t.done ? (t.doneAt || null) : null,
       createdAt: t.createdAt || new Date().toISOString()
     })).filter(t => t.title);
@@ -41,7 +43,7 @@ window.Store = (function () {
   function persist() {
     state.updatedAt = Date.now();
     write(); notify();
-    if (syncHook) { try { syncHook(state); } catch (e) {} }
+    syncHooks.forEach(fn => { try { fn(state); } catch (e) {} });
   }
 
   function load() {
@@ -59,7 +61,11 @@ window.Store = (function () {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 
   return {
-    setSyncHook(fn) { syncHook = fn; },
+    setSyncHook(fn) { syncHooks.push(fn); },
+    addSyncHook(fn) { syncHooks.push(fn); },
+    norm(d) { return normalise(d); },
+    // Save a merged copy without triggering a sync hook (sync.js pushes it itself).
+    applyMerge(d, ts) { state = normalise(d); state.updatedAt = ts || Date.now(); write(); notify(); },
     adoptRemote(d) {
       if (!d || !Array.isArray(d.tasks) || !Array.isArray(d.ventures)) return false;
       if ((Number(d.updatedAt) || 0) <= (state.updatedAt || 0)) return false;
