@@ -28,6 +28,7 @@ window.Store = (function () {
       needsApproval: !!t.needsApproval,
       decision: ["approved", "changes"].includes(t.decision) ? t.decision : "",
       decidedAt: t.decidedAt || null,
+      changeNote: String(t.changeNote || "").slice(0, 500),
       createdAt: t.createdAt || new Date().toISOString()
     })).filter(t => t.title);
     const timeOk = v => /^([01]\d|2[0-3]):[0-5]\d$/.test(v || "");
@@ -40,10 +41,11 @@ window.Store = (function () {
     })).filter(b => b.end > b.start).slice(0, 24);
     const checkins = {};
     Object.keys(d.checkins || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-14).forEach(k => {
-      const c = d.checkins[k] || {}, ends = {}, on = {};
+      const c = d.checkins[k] || {}, ends = {}, on = {}, ok = {};
       Object.keys(c.ends || {}).forEach(id => { if (timeOk(c.ends[id])) ends[id] = c.ends[id]; });
       Object.keys(c.on || {}).forEach(id => { on[id] = !!c.on[id]; });
-      checkins[k] = { energy: ["low", "steady", "high"].includes(c.energy) ? c.energy : "", ends, on };
+      Object.keys(c.ok || {}).forEach(id => { if (c.ok[id]) ok[String(id).slice(0, 60)] = true; });
+      checkins[k] = { energy: ["low", "steady", "high"].includes(c.energy) ? c.energy : "", ends, on, ok, seen: !!c.seen, midSeen: !!c.midSeen };
     });
     return { version: 1, ventures, tasks, rhythm: { blocks }, checkins };
   }
@@ -110,10 +112,10 @@ window.Store = (function () {
     deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); persist(); },
     getRhythm() { return state.rhythm.blocks; },
     setRhythm(blocks) { state.rhythm = normalise({ rhythm: { blocks } }).rhythm; persist(); },
-    getCheckin(day) { return state.checkins[day] || { energy: "", ends: {}, on: {} }; },
+    getCheckin(day) { return state.checkins[day] || { energy: "", ends: {}, on: {}, ok: {}, seen: false, midSeen: false }; },
     setCheckin(day, patch) {
-      const cur = state.checkins[day] || { energy: "", ends: {}, on: {} };
-      const next = { energy: "energy" in patch ? patch.energy : cur.energy, ends: Object.assign({}, cur.ends, patch.ends || {}), on: Object.assign({}, cur.on, patch.on || {}) };
+      const cur = state.checkins[day] || { energy: "", ends: {}, on: {}, ok: {}, seen: false, midSeen: false };
+      const next = { energy: "energy" in patch ? patch.energy : cur.energy, ends: Object.assign({}, cur.ends, patch.ends || {}), on: Object.assign({}, cur.on, patch.on || {}), ok: Object.assign({}, cur.ok, patch.ok || {}), seen: "seen" in patch ? !!patch.seen : !!cur.seen, midSeen: "midSeen" in patch ? !!patch.midSeen : !!cur.midSeen };
       state.checkins[day] = next; state.checkins = normalise({ checkins: state.checkins }).checkins; persist();
     },
     getVentures() { return state.ventures; },

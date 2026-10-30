@@ -11,6 +11,14 @@ Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Setti
 - Capacity now counts "your time" blocks when a day shape exists; otherwise the hours setting still applies.
 - No push notifications yet (needs a free scheduler; planned).
 
+## Update 2B (in progress, not live) · build 12
+- Today is one scroll: Daily brief, Your day (approvals sit inside the blocks, clashes shown as a striped band), Progress.
+- Check-in and midday check pop in once, then leave. Needs changes takes voice or typing.
+- Five tabs: Today, Plan, Cadence button (middle), Ventures, Settings. Inbox is an icon top right with a count.
+- Plan: the week, tap a day to open it (labelled ahead or back).
+- Settings is a menu: How we plan, Your day, Connections, Your data, About (version, maker tag).
+- Get CDNC page: marble background, tagline stacked.
+
 ## Update 2A (live)
 - Get CDNC page: reads the device, install steps, QR code on a computer, "Just try it in my browser".
 - "What are we doing today?" capture by voice or typing; review screen; required name, priority and venture; optional start time and length.

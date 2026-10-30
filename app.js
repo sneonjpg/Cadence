@@ -12,6 +12,7 @@
   const shortDay = s => parse(s).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
 
   let tab = "today", selected = todayStr(), lastToday = todayStr();
+  let setPage = null, inboxTab = "approvals", planStart = null;
   let confirmId = null, editV = null, confirmVRemove = null, pendingImport = null, settingsMsg = "";
   let coach = null;              // { text, status: "loading" | "ok" | "err" }
   let convo = [];                // messages sent to the API
@@ -287,11 +288,172 @@
         h("button", { class: "link", type: "button", onclick: () => { tab = "settings"; render(); } }, "Get live replies")));
   }
 
+  /* ---------- Your day: rhythm, check-in, approvals ---------- */
+  // Time we can plan on a date: the "your time" windows in the day rhythm, else the plain hours setting.
+  function capFor(day) {
+    const c = Day.hasRhythm() ? Day.capacity(day) : 0;
+    return c || (Number(Store.getSettings().dayHours) || 6) * 60;
+  }
+  const clockNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+
+  /* ---------- Today: one stream (brief, your day, progress) ---------- */
+  let dStop = null, popOpen = false, changing = null;
+  const MICSVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22M8.5 22h7"/></svg>';
+  const sec = (title, right) => h("div", { class: "sec" }, h("h2", null, title), right ? h("span", { class: "muted small" }, right) : null);
+
+  // A small Cadence mic that fills a textarea by voice. Same listening rules as the capture sheet.
+  function micFor(ta, note) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const btn = h("button", { type: "button", class: "cmic", "aria-label": "Speak" });
+    btn.innerHTML = MICSVG;
+    if (!SR) { btn.hidden = true; return btn; }
+    let want = false, fatal = false, quick = 0, rec = null, base = "";
+    const paint = on => { btn.classList.toggle("on", on); btn.setAttribute("aria-label", on ? "Stop listening" : "Speak"); if (note) note.textContent = on ? "Listening… tap the mic to stop" : ""; };
+    const stop = () => { want = false; if (rec) { try { rec.stop(); } catch (e) {} } paint(false); };
+    const begin = () => {
+      const r = new SR(); rec = r; r.lang = "en-ZA"; r.interimResults = true; r.continuous = true;
+      const started = Date.now(); let got = false; base = ta.value.trim() ? ta.value.trim() + " " : "";
+      r.onresult = e => {
+        got = true; quick = 0; const out = [];
+        const norm = s => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+        for (let i = 0; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript.trim(); if (!t) continue;
+          const prev = out.length ? out[out.length - 1] : "", nt = norm(t), np = norm(prev);
+          if (prev && nt.startsWith(np)) out[out.length - 1] = t; else if (prev && np.startsWith(nt)) { } else out.push(t);
+        }
+        ta.value = base + out.join(" ");
+      };
+      r.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { fatal = true; if (note) note.textContent = "The microphone is blocked. Allow it in Chrome’s site settings, or type."; } else if (e.error !== "no-speech" && e.error !== "aborted") { fatal = true; if (note) note.textContent = "Voice stopped. Typing works fine."; } };
+      r.onend = () => {
+        if (rec === r) rec = null;
+        if (!got && Date.now() - started < 2500) quick++;
+        if (want && !fatal && quick < 3) { setTimeout(() => { if (want && !rec) { try { begin(); } catch (e) { stop(); } } }, 120); return; }
+        want = false; paint(false);
+      };
+      r.start();
+    };
+    btn.addEventListener("click", () => { if (want) { stop(); return; } try { fatal = false; quick = 0; want = true; begin(); paint(true); } catch (e) { want = false; if (note) note.textContent = "Voice isn’t available here. Typing works fine."; } });
+    const prevStop = dStop; dStop = () => { if (prevStop) prevStop(); stop(); };
+    return btn;
+  }
+
+  const overlap = (a, b) => Day.toMin(a.start) < Day.toMin(b.end) && Day.toMin(b.start) < Day.toMin(a.end);
+  function clashesFor(day) {
+    const bl = Day.blocksFor(day).filter(b => b.on), ci = Store.getCheckin(day), out = [];
+    for (let i = 0; i < bl.length; i++) for (let j = i + 1; j < bl.length; j++) {
+      const a = bl[i], b = bl[j]; if (!overlap(a, b) || (a.kind !== "away" && b.kind !== "away")) continue;
+      const key = a.id + "|" + b.id; if (ci.ok && ci.ok[key]) continue;
+      const from = Day.hm(Math.max(Day.toMin(a.start), Day.toMin(b.start))), to = Day.hm(Math.min(Day.toMin(a.end), Day.toMin(b.end)));
+      out.push({ key, a, b, from, to, away: a.kind === "away" ? a : b, other: a.kind === "away" ? b : a });
+    }
+    return out;
+  }
+
+  function briefCard(list, cap, appr) {
+    const t = todayStr(), open = list.filter(x => !x.done), planned = open.reduce((n, x) => n + (x.mins || 0), 0);
+    const p1 = open.filter(x => x.priority === 1).length, clashes = clashesFor(selected).length;
+    const carried = selected === t ? tasks().filter(x => !x.done && x.day < t).length : 0;
+    let lead;
+    if (!open.length && !appr) lead = "Clear day. Nothing planned yet.";
+    else if (planned > cap) lead = "Full day. You’re " + fmtMins(planned - cap) + " over, so move something.";
+    else if (planned >= cap * 0.7) lead = "Busy day. Protect your time.";
+    else lead = "Light day. There’s room for more.";
+    if (appr) lead += " " + appr + (appr === 1 ? " thing needs" : " things need") + " your OK.";
+    const bits = [];
+    if (p1) bits.push(p1 + (p1 === 1 ? " P1 is" : " P1s are") + " open");
+    if (clashes) bits.push(clashes + (clashes === 1 ? " clash" : " clashes") + " in your day");
+    if (carried) bits.push(carried + " carried over from earlier");
+    if (planned) bits.push(fmtMins(planned) + " planned of " + fmtMins(cap));
+    return h("section", { class: "brief" }, h("b", { class: "lead" }, lead), bits.length ? h("ul", null, bits.map(x => h("li", null, x))) : null);
+  }
+
+  function apprItem(t) {
+    const base = h("div", { class: "task appr" },
+      h("div", { class: "body" }, h("span", { class: "title static" }, t.title), h("span", { class: "tier maintenance" }, "Waiting"),
+        h("div", { class: "meta" }, h("span", { class: "prio p" + t.priority }, PRIO_LABEL[t.priority]), h("span", { class: "muted" }, vname(t.venture)))));
+    if (changing === t.id) {
+      const ta = h("textarea", { id: "chg-" + t.id, rows: "3", maxlength: "500", placeholder: "What should change? Speak or type." });
+      const note = h("p", { class: "status", role: "status" }, "");
+      base.append(h("div", { class: "changebox" }, h("b", { class: "eyebrow" }, "What should change?"), ta,
+        h("div", { class: "microw" }, micFor(ta, note)), note,
+        h("div", { class: "acts" },
+          h("button", { type: "button", class: "btn sm", onclick: () => { if (dStop) dStop(); changing = null; Store.updateTask(t.id, { needsApproval: false, decision: "changes", decidedAt: new Date().toISOString(), changeNote: ta.value.trim().slice(0, 500) }); toast("Sent back for changes."); speak('Asked for changes on: "' + t.title + '" (P' + t.priority + ", " + vname(t.venture) + ")." + (ta.value.trim() ? " Note: " + ta.value.trim() : "")); } }, "Send back"),
+          h("button", { type: "button", class: "btn ghost sm", onclick: () => { if (dStop) dStop(); changing = null; render(); } }, "Cancel"))));
+      return base;
+    }
+    base.append(h("div", { class: "acts" },
+      h("button", { type: "button", class: "btn sm", onclick: () => decide(t, "approved") }, "Approve"),
+      h("button", { type: "button", class: "btn ghost sm", onclick: () => { changing = t.id; render(); } }, "Needs changes")),
+      h("div", { class: "acts" }, h("button", { type: "button", class: "btn ghost sm", onclick: () => openEdit(t.id) }, "Open draft")));
+    return base;
+  }
+  function decide(t, decision) {
+    const f = { needsApproval: false, decision, decidedAt: new Date().toISOString() };
+    if (decision === "approved") f.done = true;
+    Store.updateTask(t.id, f); toast(decision === "approved" ? "Approved." : "Sent back for changes.");
+    speak(`${decision === "approved" ? "Approved" : "Asked for changes on"}: "${t.title}" (P${t.priority}, ${vname(t.venture)}).`);
+  }
+
+  function dayStream(day, list, apprs) {
+    const t = todayStr(), isToday = day === t, nm = clockNow(), bl = Day.blocksFor(day), cap = Day.capacity(day);
+    const open = list.filter(x => !x.done), timed = open.filter(x => x.start);
+    const placed = new Set();
+    const out = [];
+    if (!bl.length) {
+      out.push(h("section", { class: "card" }, h("h3", null, "Shape your day"),
+        h("p", { class: "hint" }, "Tell CDNC when your day is blocked and when your time is your own. It will count what fits and warn you before you overbook."),
+        h("div", { class: "row" }, h("button", { type: "button", class: "btn", onclick: () => openBlock(null) }, "Add a block"), h("button", { type: "button", class: "btn ghost", onclick: () => { tab = "settings"; render(); } }, "More options"))));
+      if (apprs.length) apprs.forEach(a => out.push(apprItem(a)));
+    } else {
+      const wins = bl.filter(b => b.kind === "window" && b.on);
+      let host = null;
+      if (apprs.length && wins.length) host = (isToday && (wins.find(b => nm >= Day.toMin(b.start) && nm < Day.toMin(b.end)) || wins.find(b => Day.toMin(b.start) > nm))) || wins[0];
+      const cl = clashesFor(day);
+      cl.forEach(c => out.push(h("div", { class: "warn clashwarn" }, c.away.label + " runs into " + c.other.label.toLowerCase() + " from " + c.from + ". Move one of them, or keep both.",
+        h("div", { class: "acts" },
+          (c.other.optional || c.other.kind === "window") ? h("button", { type: "button", class: "btn ghost sm", onclick: () => Store.setCheckin(day, { on: { [c.other.id]: false } }) }, "Skip " + c.other.label.toLowerCase() + " today") : null,
+          h("button", { type: "button", class: "btn ghost sm", onclick: () => Store.setCheckin(day, { ok: { [c.key]: true } }) }, "Keep both")))));
+      const rows = [];
+      bl.forEach(b => {
+        const now = isToday && nm >= Day.toMin(b.start) && nm < Day.toMin(b.end);
+        const inside = b.kind === "window" && b.on ? timed.filter(x => { const w = Day.windowOf(day, x); return w && w.id === b.id; }).sort((a, c) => a.start.localeCompare(c.start)) : [];
+        inside.forEach(x => placed.add(x.id));
+        const clash = cl.find(c => c.a.id === b.id || c.b.id === b.id);
+        rows.push(h("div", { class: "blk" }, h("div", { class: "t" }, b.start, h("br"), b.end),
+          h("div", { class: "bk " + b.kind + (b.on ? "" : " off") + (now ? " now" : "") + (clash ? " clashed" : "") },
+            h("div", { class: "top" }, h("b", null, b.label), now ? h("span", { class: "nowpill" }, "Now") : h("span", { class: "muted small" }, b.on ? (b.kind === "window" ? fmtMins(b.mins) : Day.KIND[b.kind]) : "Off today")),
+            b.adjusted ? h("span", { class: "small muted" }, "Ends at " + b.end + " today") : null,
+            host && host.id === b.id ? apprs.map(apprItem) : null,
+            inside.map(x => taskRow(x, false, false)),
+            clash ? h("div", { class: "clashband" }, h("span", null, "CLASH"), h("span", null, clash.from + "–" + clash.to)) : null)));
+      });
+      out.push(h("div", { class: "tl" }, rows));
+    }
+    apprs.forEach(a => placed.add(a.id));
+    const rest = open.filter(x => !placed.has(x.id)).sort((a, b) => (a.start || "99").localeCompare(b.start || "99") || a.priority - b.priority);
+    if (rest.length) out.push(h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, bl.length ? "Anytime" : "Today’s tasks"), h("span", { class: "tier active" }, rest.length + " open")), rest.map(x => taskRow(x, false, true))));
+    return { out, cap };
+  }
+
+  function progressCard() {
+    const start = weekStart(selected), days = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(start); d.setDate(start.getDate() + i); const s = ymd(d), l = tasks().filter(x => x.day === s); days.push({ s, d, total: l.length, done: l.filter(x => x.done).length }); }
+    const mx = Math.max(1, ...days.map(x => x.total));
+    const bars = h("div", { class: "wbars", role: "img", "aria-label": "Tasks done each day this week" }, days.map(x => h("div", { class: "wb" + (x.s === selected ? " sel" : "") },
+      h("div", { class: "col" }, h("i", { class: "tot", style: "height:" + (x.total / mx * 100) + "%" }, h("u", { style: "height:" + (x.total ? x.done / x.total * 100 : 0) + "%" }))),
+      h("small", null, x.d.toLocaleDateString("en-ZA", { weekday: "narrow" })))));
+    const wk = tasks().filter(x => days.some(d => d.s === x.day));
+    const byV = {}; wk.forEach(x => { const b = byV[x.venture] = byV[x.venture] || { t: 0, d: 0 }; b.t++; if (x.done) b.d++; });
+    const vlines = Object.keys(byV).map(id => h("div", { class: "sp" }, h("div", { class: "r" }, h("span", null, vname(id)), h("span", null, byV[id].d + "/" + byV[id].t)), h("div", { class: "capbar" }, h("i", { style: "width:" + (byV[id].d / byV[id].t * 100) + "%" }))));
+    const totalDone = wk.filter(x => x.done).length;
+    return h("section", { class: "card" }, h("div", { class: "ghead" }, h("h3", null, "This week"), h("span", { class: "muted small" }, wk.length ? totalDone + " of " + wk.length + " done" : "Nothing planned")), bars, vlines);
+  }
+
   function viewToday() {
     const t = todayStr(), list = tasks().filter(x => x.day === selected);
     const done = list.filter(x => x.done).length;
     const out = [];
-    const eyebrow = selected === t ? "Today" : selected < t ? "Looking back" : "Looking ahead";
+    const eyebrow = selected === t ? "Today" : (selected < t ? "Looking back · " : "Looking ahead · ") + relDay(selected);
     const strip = h("div", { class: "days" });
     const start = weekStart(selected);
     for (let i = 0; i < 7; i++) {
@@ -311,118 +473,77 @@
         h("button", { class: "nav", type: "button", "aria-label": "Previous week", onclick: () => { const d = parse(selected); d.setDate(d.getDate() - 7); selected = ymd(d); render(); } }, "‹"),
         strip,
         h("button", { class: "nav", type: "button", "aria-label": "Next week", onclick: () => { const d = parse(selected); d.setDate(d.getDate() + 7); selected = ymd(d); render(); } }, "›"))));
-    out.push(approvalsCard());
-    if (selected >= t) out.push(askCard());
-    if (selected === t) out.push(middayCard(), checkinCard());
-    out.push(dayCard());
-    out.push(coachCard());
-    const open = list.filter(x => !x.done), planned = open.reduce((n, x) => n + (x.mins || 0), 0);
-    const cap = capFor(selected);
-    if (planned || list.length) {
-      out.push(h("section", { class: "plan" + (planned > cap ? " over" : "") },
-        planned ? h("div", { class: "line" }, h("b", null, "Planned " + fmtMins(planned)), h("span", { class: "muted" }, " of " + fmtMins(cap))) : h("div", { class: "line muted" }, "No lengths set yet. Add one to a task and we’ll count the day."),
-        planned ? h("div", { class: "bar" }, h("i", { style: "width:" + Math.min(100, planned / cap * 100) + "%" })) : null,
-        planned ? h("p", { class: "hint" }, planned > cap ? "That’s " + fmtMins(planned - cap) + " more than we can fit. Move something or shorten it." : (cap - planned > 0 ? fmtMins(cap - planned) + " still free." : "Exactly full. Nothing spare.")) : null,
-        h("button", { class: "link", type: "button", onclick: () => openReport(selected) }, "Day report")));
-    }
+    const apprs = selected === t ? tasks().filter(x => x.needsApproval && !x.done).sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title)) : [];
+    const stream = dayStream(selected, list, apprs);
+    out.push(sec("Daily brief"), briefCard(list, capFor(selected), apprs.length));
+    out.push(sec("Your day", stream.cap ? fmtMins(stream.cap) + " of your time" : ""), ...stream.out);
+    const planned = list.filter(x => !x.done).reduce((n, x) => n + (x.mins || 0), 0), cap = capFor(selected);
+    if (list.length) out.push(h("section", { class: "plan" + (planned > cap ? " over" : "") },
+      planned ? h("div", { class: "line" }, h("b", null, "Planned " + fmtMins(planned)), h("span", { class: "muted" }, " of " + fmtMins(cap))) : h("div", { class: "line muted" }, "No lengths set yet. Add one to a task and we’ll count the day."),
+      planned ? h("div", { class: "bar" }, h("i", { style: "width:" + Math.min(100, planned / cap * 100) + "%" })) : null,
+      h("button", { class: "link", type: "button", onclick: () => openReport(selected) }, "Day report")));
     const dow = parse(selected).getDay();
     if (dow === 0 || dow === 6) out.push(h("div", { class: "notice" }, "Weekend: a lighter day. Only add something here if it really won’t wait."));
     if (selected === t) {
       const carried = tasks().filter(x => !x.done && x.day < t).sort((a, b) => a.priority - b.priority || a.day.localeCompare(b.day));
-      if (carried.length) out.push(h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, "Carried over"), h("span", { class: "tier maintenance" }, carried.length + " open")), carried.map(x => taskRow(x, true))));
+      if (carried.length) out.push(h("details", { class: "group fold" }, h("summary", null, h("h2", null, "Carried over"), h("span", { class: "tier maintenance" }, carried.length + " open")), carried.map(x => taskRow(x, true))));
     }
-    if (!list.length) out.push(h("div", { class: "empty" }, "Nothing on the plan for this day yet. Tap “What are we doing today?” to start, or + to add one task."));
-    const timed = list.filter(x => x.start).sort((a, b) => a.start.localeCompare(b.start) || a.priority - b.priority);
-    if (timed.length) out.push(h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, "Schedule"), h("span", { class: "tier active" }, timed.length + " timed")), timed.map(x => taskRow(x, false, true))));
-    for (const [vid, items] of grouped(list.filter(x => !x.start))) {
-      const v = ventures().find(x => x.id === vid);
-      out.push(h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, vname(vid)), v ? h("span", { class: "tier " + v.tier }, v.tier) : null), items.map(x => taskRow(x, false))));
-    }
+    out.push(sec("Progress"), progressCard());
+    if (selected >= t) out.push(askCard());
+    out.push(coachCard());
     return out;
   }
 
-  /* ---------- Your day: rhythm, check-in, approvals ---------- */
-  // Time we can plan on a date: the "your time" windows in the day rhythm, else the plain hours setting.
-  function capFor(day) {
-    const c = Day.hasRhythm() ? Day.capacity(day) : 0;
-    return c || (Number(Store.getSettings().dayHours) || 6) * 60;
+  /* ---------- Pop-ins: check-in and midday check (they appear, then leave) ---------- */
+  function popShell(children, onDismiss) {
+    popOpen = true;
+    const close = () => { popOpen = false; root.remove(); };
+    const root = h("div", { class: "popscrim", onclick: e => { if (e.target === root) { onDismiss(); close(); } } }, h("div", { class: "pop", role: "dialog", "aria-modal": "true" }, children(close)));
+    document.body.append(root);
+    return close;
   }
-  const clockNow = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
-
-  function approvalsCard() {
-    const list = tasks().filter(x => x.needsApproval && !x.done).sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
-    if (!list.length) return null;
-    return h("section", { class: "group" }, h("div", { class: "ghead" }, h("h2", null, "Waiting for you"), h("span", { class: "tier maintenance" }, list.length + " to approve")),
-      list.map(t => h("div", { class: "task appr" },
-        h("div", { class: "body" }, h("span", { class: "title static" }, t.title),
-          h("div", { class: "meta" }, h("span", { class: "prio p" + t.priority }, PRIO_LABEL[t.priority]), h("span", { class: "muted" }, vname(t.venture)))),
-        h("div", { class: "acts" },
-          h("button", { type: "button", class: "btn sm", onclick: () => decide(t, "approved") }, "Approve"),
-          h("button", { type: "button", class: "btn ghost sm", onclick: () => decide(t, "changes") }, "Needs changes")))),
-      h("p", { class: "hint" }, "Approve marks it done. Needs changes keeps it open so it comes back."));
+  function checkinPop(day) {
+    const ci = Store.getCheckin(day), opt = Day.blocksFor(day).filter(b => b.optional);
+    let energy = ci.energy || "steady"; const on = {}; opt.forEach(b => { on[b.id] = b.on; });
+    popShell(close => {
+      const big = h("div", { class: "big3", role: "group", "aria-label": "How’s the day going?" });
+      const paint = () => { big.replaceChildren(...[["low", "Running low", "I’ll lighten the afternoon"], ["steady", "Fine", "Plan stays as it is"], ["high", "Good to go", "I’ll offer one more task"]].map(o =>
+        h("button", { type: "button", class: "o" + (energy === o[0] ? " on" : ""), "aria-pressed": String(energy === o[0]), onclick: () => { energy = o[0]; paint(); } }, h("b", null, o[1]), h("small", null, o[2])))); };
+      paint();
+      const optRows = opt.map(b => { const yes = h("button", { type: "button", class: "pillbtn" }), no = h("button", { type: "button", class: "pillbtn" });
+        const p2 = () => { yes.className = "pillbtn" + (on[b.id] ? " on" : ""); no.className = "pillbtn" + (!on[b.id] ? " on" : ""); yes.textContent = "Yes"; no.textContent = "No"; yes.setAttribute("aria-pressed", String(!!on[b.id])); no.setAttribute("aria-pressed", String(!on[b.id])); };
+        yes.onclick = () => { on[b.id] = true; p2(); }; no.onclick = () => { on[b.id] = false; p2(); }; p2();
+        return h("div", { class: "swrow" }, h("span", null, "Use " + b.label.toLowerCase() + " today?", h("small", null, b.start + "–" + b.end)), h("span", { class: "yn" }, yes, no)); });
+      return [h("p", { class: "eyebrow" }, "Check-in"), h("h2", null, "How’s the day going?"), h("p", { class: "hint" }, "Tap one. I’ll adjust the rest of today."), big, ...optRows,
+        h("div", { class: "acts center" }, h("button", { type: "button", class: "btn", onclick: () => { close(); Store.setCheckin(day, { energy, on, seen: true }); } }, "Done"))];
+    }, () => Store.setCheckin(day, { seen: true }));
   }
-  function decide(t, decision) {
-    const f = { needsApproval: false, decision, decidedAt: new Date().toISOString() };
-    if (decision === "approved") f.done = true;
-    Store.updateTask(t.id, f); toast(decision === "approved" ? "Approved." : "Sent back for changes.");
-    speak(`${decision === "approved" ? "Approved" : "Asked for changes on"}: "${t.title}" (P${t.priority}, ${vname(t.venture)}).`);
+  function middayPop(day, b) {
+    const usual = b.end, opts = Day.endOptions(b);
+    const near = [-30, 0, 30].map(d => Day.hm(Day.toMin(usual) + d)).filter(v => opts.includes(v));
+    let pick = usual;
+    popShell(close => {
+      const chips = h("div", { class: "chips4" }), other = h("select", { id: "midOther", "aria-label": "Another time", hidden: true }, opts.map(v => h("option", { value: v }, v)));
+      other.value = opts.includes(usual) ? usual : opts[0];
+      other.onchange = () => { pick = other.value; };
+      const paint = (isOther) => { chips.replaceChildren(...near.map(v => h("button", { type: "button", class: "o2" + (!isOther && pick === v ? " on" : ""), onclick: () => { pick = v; other.hidden = true; paint(false); } }, v)),
+        h("button", { type: "button", class: "o2" + (isOther ? " on" : ""), onclick: () => { other.hidden = false; pick = other.value; paint(true); } }, "Other")); };
+      paint(false);
+      const save = v => { close(); Store.setCheckin(day, { ends: { [b.id]: v }, midSeen: true }); toast("Your afternoon is updated."); };
+      return [h("p", { class: "eyebrow" }, "Midday check · 12:00"), h("h2", null, "When does " + b.label.toLowerCase() + " finish today?"), h("p", { class: "hint" }, "Your usual is " + usual + ". Your afternoon rebuilds from this."), chips, other,
+        h("div", { class: "acts" }, h("button", { type: "button", class: "btn", onclick: () => save(usual) }, "Same as usual"), h("button", { type: "button", class: "btn ghost", onclick: () => save(pick) }, "Set it"))];
+    }, () => Store.setCheckin(day, { midSeen: true }));
   }
-
-  // Midday question: the day-to-day end time of any block marked "varies".
-  function middayCard() {
-    const day = todayStr(), hr = new Date().getHours();
-    if (hr < 12 || hr >= 21) return null;
-    const ci = Store.getCheckin(day), due = Day.flexBlocks(day).filter(b => !(ci.ends && ci.ends[b.id]));
-    if (!due.length) return null;
-    return h("section", { class: "card ask2" }, h("p", { class: "eyebrow" }, "Midday check"),
-      due.map(b => {
-        const sel = h("select", { id: "mid-" + b.id, "aria-label": "When does " + b.label + " end?" }, Day.endOptions(b).map(v => h("option", { value: v }, v)));
-        const planned = Day.endOptions(b).includes(b.end) ? b.end : Day.endOptions(b)[0]; sel.value = planned;
-        const save = v => { Store.setCheckin(day, { ends: { [b.id]: v } }); toast("Your afternoon is updated."); };
-        return h("div", { class: "midrow" }, h("label", { for: "mid-" + b.id, class: "q2" }, "When does " + b.label.toLowerCase() + " finish today?"),
-          h("div", { class: "row" }, sel, h("button", { type: "button", class: "btn", onclick: () => save(sel.value) }, "Set"), h("button", { type: "button", class: "btn ghost", onclick: () => save(planned) }, "As planned")));
-      }));
-  }
-
-  function checkinCard() {
+  let popTimer = null;
+  function maybePop() {
+    clearTimeout(popTimer);
+    if (tab !== "today" || popOpen) return;
     const day = todayStr();
-    if (!Day.hasRhythm()) {
-      if (isFresh() && !Store.getSettings().skippedDay) return null;
-      return h("section", { class: "card" }, h("h3", null, "Shape your day"),
-        h("p", { class: "hint" }, "Tell CDNC when your day is blocked and when your time is your own. It will count what fits and warn you before you overbook."),
-        h("div", { class: "row" }, h("button", { type: "button", class: "btn", onclick: () => openBlock(null) }, "Add a block"), h("button", { type: "button", class: "btn ghost", onclick: () => { tab = "settings"; render(); } }, "More options")));
-    }
-    const ci = Store.getCheckin(day), bl = Day.blocksFor(day), optional = bl.filter(b => b.optional);
-    if (!bl.length) return null;
-    const energy = h("div", { class: "seg", role: "group", "aria-label": "Energy today" },
-      [["low", "Low"], ["steady", "Steady"], ["high", "High"]].map(o => h("button", { type: "button", "aria-pressed": String(ci.energy === o[0]), onclick: () => Store.setCheckin(day, { energy: ci.energy === o[0] ? "" : o[0] }) }, o[1])));
-    const open = tasks().filter(x => x.day === day && !x.done);
-    const longP1 = open.some(x => x.priority === 1 && (x.mins || 0) >= 60);
-    return h("section", { class: "card" }, h("div", { class: "ghead" }, h("h3", null, "Check-in"), h("span", { class: "muted small" }, "Takes ten seconds")),
-      h("div", { class: "fieldline" }, h("span", { class: "lbl" }, "Energy"), energy),
-      optional.map(b => {
-        const sw = h("input", { type: "checkbox", id: "on-" + b.id, onchange: () => Store.setCheckin(day, { on: { [b.id]: sw.checked } }) }); sw.checked = b.on;
-        return h("div", { class: "switch" }, h("label", { for: "on-" + b.id, style: "color:var(--ink);font-size:16px" }, "Use " + b.label.toLowerCase() + " (" + b.start + "–" + b.end + ")"), sw);
-      }),
-      ci.energy === "low" && longP1 ? h("p", { class: "notice small" }, "Low energy and a long P1 today. Do the smallest first step now and leave the rest.") : null);
-  }
-
-  function dayCard() {
-    const day = selected, bl = Day.blocksFor(day);
-    if (!bl.length) return null;
-    const isToday = day === todayStr(), nm = clockNow();
-    const list = tasks().filter(x => x.day === day && !x.done && x.start);
-    const cap = Day.capacity(day);
-    return h("section", { class: "card" }, h("div", { class: "ghead" }, h("h3", null, "Your day"), h("span", { class: "tier active" }, cap ? fmtMins(cap) + " of your time" : "No time of your own")),
-      h("div", { class: "tl" }, bl.map(b => {
-        const now = isToday && nm >= Day.toMin(b.start) && nm < Day.toMin(b.end);
-        const inside = b.kind === "window" && b.on ? list.filter(x => { const w = Day.windowOf(day, x); return w && w.id === b.id; }).sort((a, c) => a.start.localeCompare(c.start)) : [];
-        return h("div", { class: "blk" }, h("div", { class: "t" }, b.start, h("br"), b.end),
-          h("div", { class: "bk " + b.kind + (b.on ? "" : " off") + (now ? " now" : "") },
-            h("div", { class: "top" }, h("b", null, b.label), now ? h("span", { class: "nowpill" }, "Now") : h("span", { class: "muted small" }, b.on ? (b.kind === "window" ? fmtMins(b.mins) : Day.KIND[b.kind]) : "Off today")),
-            b.adjusted ? h("span", { class: "small muted" }, "Ends at " + b.end + " today") : null,
-            inside.map(x => h("span", { class: "small" }, x.start + " · " + x.title))));
-      })));
+    if (selected !== day) return;
+    if (document.documentElement.classList.contains("booting") || document.getElementById("first") || !document.getElementById("gate").hidden || document.querySelector("#sheetRoot .scrim")) { popTimer = setTimeout(maybePop, 700); return; }
+    const ci = Store.getCheckin(day), hr = new Date().getHours();
+    if (!ci.seen && Day.blocksFor(day).length && !Store.getSettings().noPops) return checkinPop(day);
+    if (hr >= 12 && hr < 21 && !ci.midSeen) { const due = Day.flexBlocks(day).filter(b => !(ci.ends && ci.ends[b.id])); if (due.length) return middayPop(day, due[0]); }
   }
 
   /* ---- Settings: build or change the day rhythm ---- */
@@ -539,7 +660,7 @@
     return out;
   }
 
-  function openCapture(first) {
+  function openCapture(first, autoMic) {
     const pref = Store.getSettings().input || "both";
     openSheet(sheet => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -652,6 +773,7 @@
         validate();
       };
       showInput();
+      if (autoMic && pref !== "text" && !mic.hidden) mic.click();
     });
   }
 
@@ -746,27 +868,94 @@
     render();
   }
 
+
+  /* ---------- Settings: a menu, each row opens its own page ---------- */
+  const SET_PAGES = [["plan", "How we plan", () => { const s = Store.getSettings(); return ({ both: "Speak or type", voice: "Voice first", text: "Typing first" })[s.input || "both"] + " · " + (s.dayHours || 6) + " h a day"; }],
+    ["day", "Your day", () => { const n = Store.getRhythm().length; return n ? n + (n === 1 ? " block" : " blocks") + " · Day code" : "Not set up yet"; }],
+    ["conn", "Connections", () => (Claude.live() ? "Claude is on" : "All off") + " · keys stay on this phone"],
+    ["data", "Your data", () => { const s = Store.getSettings(); return s.lastExport ? "Last export " + new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "Export and import"; }],
+    ["about", "About", () => "CDNC 2B (in progress) · build 12"]];
   function viewSettings() {
+    if (!setPage) {
+      const s = Store.getSettings();
+      return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
+        h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), s.maker ? h("p", { class: "makertag" }, s.maker) : null)];
+    }
+    const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
+    return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
+  }
+
+  /* ---------- Plan: the week, tap a day to open it ---------- */
+  const relDay = s => { const n = Math.round((parse(s) - parse(todayStr())) / 864e5); return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n === -1 ? "Yesterday" : n > 1 ? n + " days ahead" : (-n) + " days ago"; };
+  function viewPlan() {
+    const t = todayStr(); if (!planStart) planStart = ymd(weekStart(selected));
+    const start = parse(planStart), end = new Date(start); end.setDate(start.getDate() + 6);
+    const shift = n => { const d = parse(planStart); d.setDate(d.getDate() + n); planStart = ymd(d); render(); };
+    const fmt = d => d.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+    const out = [h("header", null, h("p", { class: "eyebrow" }, "Plan"), h("h1", null, ymd(weekStart(t)) === planStart ? "This week" : fmt(start) + " – " + fmt(end)),
+      h("div", { class: "row", style: "justify-content:space-between" }, h("button", { class: "nav", type: "button", style: "flex:none;width:44px", "aria-label": "Previous week", onclick: () => shift(-7) }, "‹"), h("button", { class: "link", type: "button", onclick: () => { planStart = ymd(weekStart(t)); render(); } }, "This week"), h("button", { class: "nav", type: "button", style: "flex:none;width:44px", "aria-label": "Next week", onclick: () => shift(7) }, "›")))];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i); const s = ymd(d), l = tasks().filter(x => x.day === s).sort((a, b) => (a.start || "99").localeCompare(b.start || "99") || a.priority - b.priority), dn = l.filter(x => x.done).length;
+      if ((i >= 5) && !l.length) continue;
+      out.push(h("section", { class: "daycard" + (s === t ? " today" : "") },
+        h("button", { type: "button", class: "dh", "aria-label": "Open " + longDay(s), onclick: () => { selected = s; tab = "today"; window.scrollTo(0, 0); render(); } },
+          h("span", null, h("b", null, d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric" })), h("span", { class: "muted small" }, "  " + relDay(s))), h("span", { class: "muted small" }, l.length ? dn + "/" + l.length : "Open ›")),
+        l.length ? l.map(x => h("div", { class: "dayline" + (x.done ? " dn" : "") }, h("i", null), (x.start ? x.start + " " : "") + x.title)) : h("div", { class: "muted small" }, "Nothing planned")));
+    }
+    return out;
+  }
+
+  /* ---------- Inbox: approvals waiting, and what you decided ---------- */
+  function viewInbox() {
+    const apprs = tasks().filter(x => x.needsApproval && !x.done).sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
+    const out = [h("header", null, h("p", { class: "eyebrow" }, apprs.length ? apprs.length + " waiting" : "All clear"), h("h1", null, "Inbox")),
+      h("div", { class: "seg", role: "group", "aria-label": "Inbox" }, [["approvals", "Approvals · " + apprs.length], ["messages", "Messages · 0"]].map(o => h("button", { type: "button", "aria-pressed": String(inboxTab === o[0]), onclick: () => { inboxTab = o[0]; render(); } }, o[1])))];
+    if (inboxTab === "messages") { out.push(h("div", { class: "empty" }, "No messages yet. Messages from apps you connect will land here.")); return out; }
+    if (!apprs.length) out.push(h("div", { class: "empty" }, "Nothing is waiting for your OK."));
+    apprs.forEach(a => out.push(apprItem(a)));
+    const done = tasks().filter(x => x.decision && x.decidedAt).sort((a, b) => b.decidedAt.localeCompare(a.decidedAt)).slice(0, 5);
+    if (done.length) out.push(sec("Recently decided"), h("section", { class: "card" }, done.map(x => h("div", { class: "swrow" }, h("span", null, x.title), h("span", { class: "muted small" }, x.decision === "approved" ? "Approved" : "Changes asked")))));
+    return out;
+  }
+
+  /* ---------- The Cadence button: one place to add or change anything ---------- */
+  function openCadence() {
+    openSheet(sheet => {
+      sheet.classList.add("cadsheet");
+      const opt = (label, fn, svgp) => { const b = h("button", { type: "button", onclick: fn }, label); b.insertAdjacentHTML("afterbegin", '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + svgp + "</svg>"); return b; };
+      sheet.append(h("div", { class: "ghead" }, h("h2", null, "What are we doing?"), h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => closeSheet() }, "×")),
+        h("button", { type: "button", class: "big", onclick: () => openCapture(false, true) }, h("img", { src: "icons/icon-192.png", alt: "" }), h("span", null, h("b", null, "Tap to speak"), h("small", null, "Tell me the lot. I’ll turn it into tasks you approve."))),
+        h("div", { class: "cadopts" },
+          opt("Type it", () => openCapture(false, false), '<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
+          opt("One task", () => openAdd(), '<path d="M12 5v14M5 12h14"/>'),
+          opt("Check in", () => { if (!Day.hasRhythm()) { closeSheet(); toast("Set up your day first, in Settings."); return; } Store.setCheckin(todayStr(), { seen: false }); selected = todayStr(); tab = "today"; closeSheet(); render(); }, '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')),
+        h("p", { class: "hint" }, "Everything you add starts here. Today only shows and decides."));
+    });
+  }
+
+  function settingsGroups() {
     const st = Store.get(), s = Store.getSettings(), c = Claude.cfg();
-    const out = [h("header", null, h("p", { class: "eyebrow" }, "Keep it safe"), h("h1", null, "Backup & settings"))];
+    const groups = {}; let cur = "data"; const P = el => { (groups[cur] = groups[cur] || []).push(el); };
     const file = h("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: async e => {
       const f = e.target.files[0]; if (!f) return;
       try { pendingImport = Store.parseImport(await f.text()); settingsMsg = ""; } catch (err) { pendingImport = null; settingsMsg = err.message; }
       render();
     } });
     const last = s.lastExport ? new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "never";
-    out.push(h("section", { class: "card" }, h("h3", null, window.CadenceSync && window.CadenceSync.on ? "Your data is backed up" : "Your data lives on this phone"),
+    P(h("section", { class: "card" }, h("h3", null, window.CadenceSync && window.CadenceSync.on ? "Your data is backed up" : "Your data lives on this phone"),
       h("p", { class: "hint" }, window.CadenceSync && window.CadenceSync.on ? "Saved on this phone and in your Claude account, so it follows you across devices and survives clearing Chrome. Export is an extra copy." : "Clearing Chrome’s site data would wipe it. Export now and then, and keep the file in Drive or WhatsApp."),
       h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: exportNow }, "Export"), h("button", { class: "btn ghost", type: "button", onclick: () => file.click() }, "Import"), file),
       h("p", { class: "status" }, settingsMsg || `Last export: ${last} · ${st.tasks.length} tasks, ${st.ventures.length} ventures`),
       Store.ok() ? null : h("p", { class: "notice small" }, "This browser isn’t letting Cadence save. Open it in Chrome (not a private tab).")));
-    if (pendingImport) out.push(h("section", { class: "card" }, h("h3", null, "Replace everything?"),
+    if (pendingImport) P(h("section", { class: "card" }, h("h3", null, "Replace everything?"),
       h("p", { class: "hint" }, `This file has ${pendingImport.tasks.length} tasks and ${pendingImport.ventures.length} ventures. Importing replaces what’s on this phone now.`),
       h("div", { class: "row" }, h("button", { class: "btn ghost", type: "button", onclick: () => { pendingImport = null; render(); } }, "Cancel"),
         h("button", { class: "btn", type: "button", onclick: () => { Store.replaceAll(pendingImport); pendingImport = null; settingsMsg = "Restored from backup."; render(); } }, "Replace"))));
 
 
-    out.push(h("section", { class: "card" }, h("h3", null, "How we plan"),
+    cur = "plan";
+    P(h("section", { class: "card" }, h("h3", null, "How we plan"),
       (() => {
         const sel = h("select", { id: "sInput", onchange: () => { Store.setSettings({ input: sel.value }); toast("Saved."); } },
           [["both", "Both: speak or type"], ["voice", "Voice first"], ["text", "Typing first"]].map(o => h("option", { value: o[0] }, o[1]))); sel.value = s.input || "both";
@@ -774,15 +963,17 @@
         return h("div", { class: "fields" }, h("label", { for: "sInput" }, "How I like to tell CDNC things", sel), h("label", { for: "sHours" }, "Hours we can plan in a day", hrs));
       })(),
       h("p", { class: "hint" }, "The day report warns you when the timed tasks add up to more than this. If you set up your day below, that takes over on the days it covers.")));
-    out.push(rhythmCard());
+    cur = "day";
+    P(rhythmCard());
 
+    cur = "conn";
     // Sync with Claude (Make): hidden in this version; the sync script is not loaded.
     if (window.Sync && !(window.claude && window.claude.use)) {
       const si = Sync.info(), ago = si.lastOk ? new Date(si.lastOk).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "";
       if (Sync.configured()) {
         const auto = h("input", { type: "checkbox", id: "sAuto", onchange: () => { Store.setSettings({ syncAuto: auto.checked }); render(); } }); auto.checked = si.auto;
         const used = si.opsUsed, pct = Math.min(100, Math.round(used / si.opsLimit * 100));
-        out.push(h("section", { class: "card" }, h("h3", null, "Synced with Claude"),
+        P(h("section", { class: "card" }, h("h3", null, "Synced with Claude"),
           h("p", { class: "hint" }, "Your plan is mirrored to your Make account. Tell Claude in any chat to check Cadence and it reads your plan, and changes it makes show up here."),
           h("p", { class: "status", role: "status" }, si.status === "syncing" ? "Syncing…" : si.status === "error" ? si.message : (si.message || "Ready.") + (ago ? " Last sync " + ago + "." : "")),
           h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => Sync.now() }, "Sync now"),
@@ -792,7 +983,7 @@
       } else {
         const code = h("input", { type: "text", id: "sCode", placeholder: "Paste setup link or code", autocomplete: "off", spellcheck: "false" });
         const m = h("p", { class: "status", role: "status" }, "");
-        out.push(h("section", { class: "card" }, h("h3", null, "Sync with Claude"),
+        P(h("section", { class: "card" }, h("h3", null, "Sync with Claude"),
           h("p", { class: "hint" }, "Connect Cadence to your Make account so Claude can read and update your plan from any chat, and your changes reach Claude. Open the setup link Claude gave you, or paste the code here."),
           h("label", { for: "sCode" }, "Setup code", code),
           h("button", { class: "btn", type: "button", onclick: () => { if (Sync.connect(code.value)) { render(); toast("Sync connected"); } else m.textContent = "That doesn’t look like a setup link or code."; } }, "Connect"),
@@ -803,7 +994,7 @@
     // Claude settings
     if (Claude.source() === "claude") {
       const auto = h("input", { type: "checkbox", id: "kAuto", onchange: () => { Store.setSettings({ auto: auto.checked }); } }); auto.checked = c.auto;
-      out.push(h("section", { class: "card" }, h("h3", null, "Claude"),
+      P(h("section", { class: "card" }, h("h3", null, "Claude"),
         h("p", { class: "hint" }, "Connected through your Claude account. Nothing to set up. Replies use your normal Claude usage, and Chrome or the app may ask you to allow it the first time."),
         h("div", { class: "switch" }, h("label", { for: "kAuto", style: "color:var(--ink);font-size:16px" }, "Speak up as I work"), auto),
         h("p", { class: "small muted" }, "When this is on, Claude replies each time you tick, move or add a task.")));
@@ -817,7 +1008,7 @@
         if (key.value.trim()) patch.apiKey = key.value.trim();
         Store.setSettings(patch); key.value = ""; msg.textContent = "Saved."; toast("Claude settings saved."); render();
       };
-      out.push(h("section", { class: "card" }, h("h3", null, "Claude"),
+      P(h("section", { class: "card" }, h("h3", null, "Claude"),
         h("p", { class: "hint" }, "Optional live mode: Claude answers inside Cadence as you tick, move and add tasks, and you can chat with it. It uses your own Anthropic API key, billed to that key (a few cents a day at most). Set a spend limit in the Anthropic console."),
         h("label", { for: "kKey" }, "API key", key),
         h("label", { for: "kModel" }, "Model", model),
@@ -834,20 +1025,26 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "CDNC · build 11"));
-    return out;
+    cur = "about";
+    const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: "e.g. your studio or team name", value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
+    P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. It stays on this phone."), h("label", { for: "sMaker" }, "Your tag", maker)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), s.maker ? h("p", { class: "makertag" }, s.maker) : null));
+    return groups;
   }
 
   /* ---------- shell ---------- */
   function render() {
+    if (dStop) { dStop(); dStop = null; }
     const view = $("view"); view.replaceChildren();
-    const parts = tab === "today" ? viewToday() : tab === "ventures" ? viewVentures() : viewSettings();
+    const parts = tab === "today" ? viewToday() : tab === "plan" ? viewPlan() : tab === "inbox" ? viewInbox() : tab === "ventures" ? viewVentures() : viewSettings();
+    const n = tasks().filter(x => x.needsApproval && !x.done).length, bd = $("inboxBd"); bd.hidden = !n; bd.textContent = String(n); $("inbox").setAttribute("aria-label", n ? "Inbox, " + n + " waiting" : "Inbox"); if (tab === "inbox") $("inbox").setAttribute("aria-current", "page"); else $("inbox").removeAttribute("aria-current");
     parts.filter(Boolean).forEach(p => view.append(p));
-    $("fab").hidden = tab !== "today";
-    document.querySelectorAll("#tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+    if (tab === "today") { clearTimeout(popTimer); popTimer = setTimeout(maybePop, 350); }
+    document.querySelectorAll("#tabs button[data-tab]").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
-  document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; editV = null; window.scrollTo(0, 0); render(); }));
-  $("fab").addEventListener("click", openAdd);
+  document.querySelectorAll("#tabs button[data-tab]").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; editV = null; setPage = null; window.scrollTo(0, 0); render(); }));
+  $("inbox").addEventListener("click", () => { tab = "inbox"; inboxTab = "approvals"; window.scrollTo(0, 0); render(); });
+  $("cad").addEventListener("click", () => openCadence());
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     const t = todayStr();
