@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cadence</title>
+<title>CDNC</title>
 <meta name="theme-color" content="#F3EEE4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111B15" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Cadence">
+<meta name="apple-mobile-web-app-title" content="CDNC">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -19,6 +19,8 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="splash" aria-hidden="true"><div class="mk">CDNC</div><div class="tg">Find your rhythm. Keep going.</div></div>
+<div id="gate" hidden></div>
 <div id="app">
   <main id="view" aria-live="polite"></main>
   <button id="fab" type="button" aria-label="Add a task">+</button>
@@ -30,9 +32,9 @@
 </div>
 <div id="sheetRoot"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<script src="welcome.js"></script>
 <script src="seed.js"></script>
 <script src="store.js"></script>
-<script src="sync.js"></script>
 <script src="claude.js"></script>
 <script src="app.js"></script>
 </body>

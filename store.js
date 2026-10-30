@@ -22,6 +22,8 @@ window.Store = (function () {
       venture: t.venture || "other",
       priority: [1, 2, 3].includes(Number(t.priority)) ? Number(t.priority) : 2,
       day: /^\d{4}-\d{2}-\d{2}$/.test(t.day) ? t.day : todayStr(),
+      start: /^([01]\d|2[0-3]):[0-5]\d$/.test(t.start || "") ? t.start : "",
+      mins: Math.max(0, Math.min(960, Math.round(Number(t.mins) || 0))),
       done: !!t.done, doneAt: t.done ? (t.doneAt || null) : null,
       createdAt: t.createdAt || new Date().toISOString()
     })).filter(t => t.title);
