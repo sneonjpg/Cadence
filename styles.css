@@ -103,28 +103,39 @@ body.lock { overflow: hidden; }
 @media (max-width: 420px) { .fields { grid-template-columns: 1fr; } .day b { font-size: 18px; } h1 { font-size: 32px; } }
 @media (prefers-reduced-motion: reduce) { .bar > i, #toast { transition: none; } }
 
-/* ---- splash (about a second, pure CSS so it can never stick) ---- */
-#splash { position: fixed; inset: 0; z-index: 100; background: #1F4D3A; display: flex; align-items: center; justify-content: center; }
-#splash.go { animation: splashOut .3s ease 1.9s forwards; }
+/* ---- splash: the C and CDNC are cut into matte green stone, then push out (pure CSS, can never stick) ---- */
+#splash { position: fixed; inset: 0; height: 100lvh; z-index: 100; background: #1F4D3A url(icons/stone.jpg) center / cover; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#splash.go { animation: splashOut .3s ease 2.6s forwards; }
+#splash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.13) 50%, transparent 60%) 130% 0 / 260% 100% no-repeat; pointer-events: none; }
+#splash.go::after { animation: lgSweep 1s ease 1.2s both; }
 .lg { position: relative; width: min(112vw, 520px); aspect-ratio: 560 / 340; }
-.lg img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lg img, .lg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 #splash:not(.go) .lg > * { visibility: hidden; }
-.lg .lc { animation: lgRise .6s cubic-bezier(.2,.8,.2,1) both; }
-.lg .ll { animation: lgIn .4s ease both; }
-.lg .l0 { animation-delay: .6s; } .lg .l1 { animation-delay: .75s; } .lg .l2 { animation-delay: .9s; } .lg .l3 { animation-delay: 1.05s; }
-.lg .sw { display: none; }
-@keyframes lgRise { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes lgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#splash .cut { fill: none; stroke: #0A2418; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: .9; }
+#splash .cut.edge { stroke: #F4DDAA; stroke-width: 1.9; filter: drop-shadow(0 0 3px #F4DDAA); }
+#splash.go .cg .cut { animation: cutDraw var(--d) cubic-bezier(.5,0,.3,1) var(--t) forwards, cutGone .3s ease var(--o) forwards; }
+#splash.go .ce .cut { animation: cutDraw var(--d) cubic-bezier(.5,0,.3,1) var(--t) forwards, cutGone .25s ease var(--o) forwards; }
+#splash .c0 { --t: .25s; --d: 1s; --o: 1.4s; } #splash .c1 { --t: 1.15s; --d: .35s; --o: 1.7s; } #splash .c2 { --t: 1.27s; --d: .35s; --o: 1.82s; } #splash .c3 { --t: 1.39s; --d: .35s; --o: 1.94s; } #splash .c4 { --t: 1.51s; --d: .35s; --o: 2.06s; }
+#splash .lc { animation: lgPush .75s cubic-bezier(.2,.8,.2,1) 1.1s both; }
+#splash .ll { animation: lgPush .5s cubic-bezier(.2,.8,.2,1) both; }
+#splash .l0 { animation-delay: 1.55s; } #splash .l1 { animation-delay: 1.67s; } #splash .l2 { animation-delay: 1.79s; } #splash .l3 { animation-delay: 1.91s; }
+@keyframes lgPush { from { opacity: 0; filter: brightness(.3); transform: scale(.975); } 40% { opacity: .95; filter: brightness(.8) drop-shadow(0 12px 14px rgba(0,0,0,.5)); transform: scale(1.018); } to { opacity: 1; filter: none; transform: none; } }
+@keyframes cutDraw { to { stroke-dashoffset: 0; } }
+@keyframes cutGone { to { opacity: 0; } }
 @keyframes lgSweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 @keyframes splashOut { to { opacity: 0; visibility: hidden; } }
-@media (prefers-reduced-motion: reduce) { #splash.go { animation: splashOut .01s linear .6s forwards; } .lg .lc, .lg .ll { animation: none; } }
+/* the Get CDNC panel reuses the logo, already settled */
+.g-logo .lc, .g-logo .ll { animation: lgIn .6s ease both; }
+@keyframes lgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #splash.go { animation: splashOut .01s linear .6s forwards; } #splash .lc, #splash .ll { animation: none; } #splash .cg, #splash .ce, #splash::after { display: none; } }
+html.booting #app, html.booting #tabs, html.booting #fab, html.booting #gate, html.booting #first, html.booting #toast { visibility: hidden !important; }
 
 /* ---- "Get CDNC" page ---- */
 #gate { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; display: flex; }
 #gate[hidden] { display: none; }
 body.gated #app, body.gated #fab, body.gated #tabs { visibility: hidden; }
 .g-box { margin: auto; width: 100%; max-width: 420px; padding: 32px 24px calc(32px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 36px; text-align: center; }
-.g-logo { width: 100%; background: #1F4D3A; border-radius: 22px; padding: 6px 0 22px; display: flex; flex-direction: column; align-items: center; }
+.g-logo { width: 100%; background: #1F4D3A url(icons/stone.jpg) center / cover; border-radius: 22px; padding: 6px 0 22px; display: flex; flex-direction: column; align-items: center; }
 .g-logo .lg { width: 100%; }
 .g-tag { margin-top: -26px; color: #F3EEE4; opacity: .85; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
 .g-main { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; }
