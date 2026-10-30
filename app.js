@@ -12,6 +12,7 @@
   const shortDay = s => parse(s).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
 
   let tab = "today", selected = todayStr(), lastToday = todayStr();
+  const MAKER = "Neo Works";
   let setPage = null, inboxTab = "approvals", planStart = null;
   let confirmId = null, editV = null, confirmVRemove = null, pendingImport = null, settingsMsg = "";
   let coach = null;              // { text, status: "loading" | "ok" | "err" }
@@ -880,7 +881,7 @@
       const s = Store.getSettings();
       return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
         h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
-        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), s.maker ? h("p", { class: "makertag" }, s.maker) : null)];
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), h("p", { class: "makertag" }, s.maker || MAKER))];
     }
     const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
     return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
@@ -1026,9 +1027,9 @@
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
     cur = "about";
-    const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: "e.g. your studio or team name", value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
-    P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. It stays on this phone."), h("label", { for: "sMaker" }, "Your tag", maker)));
-    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), s.maker ? h("p", { class: "makertag" }, s.maker) : null));
+    const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: MAKER, value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
+    P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. Leave it empty to show “" + MAKER + "”."), h("label", { for: "sMaker" }, "Your tag", maker)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), h("p", { class: "makertag" }, s.maker || MAKER)));
     return groups;
   }
 

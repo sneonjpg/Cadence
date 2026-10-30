@@ -16,7 +16,7 @@ Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Setti
 - Check-in and midday check pop in once, then leave. Needs changes takes voice or typing.
 - Five tabs: Today, Plan, Cadence button (middle), Ventures, Settings. Inbox is an icon top right with a count.
 - Plan: the week, tap a day to open it (labelled ahead or back).
-- Settings is a menu: How we plan, Your day, Connections, Your data, About (version, maker tag).
+- Settings is a menu: How we plan, Your day, Connections, Your data, About (version, then the maker tag "Neo Works", editable in About).
 - Get CDNC page: marble background, tagline stacked.
 
 ## Update 2A (live)
