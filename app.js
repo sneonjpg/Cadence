@@ -40,6 +40,7 @@
     const t = $("toast"); t.textContent = msg; t.classList.add("on");
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
   }
+  window.__cadenceToast = msg => toast(msg);
 
   /* ---------- Claude plumbing ---------- */
   function trimConvo() { while (convo.length > 12) convo.shift(); while (convo.length && convo[0].role !== "user") convo.shift(); }
@@ -362,6 +363,31 @@
       h("div", { class: "row" }, h("button", { class: "btn ghost", type: "button", onclick: () => { pendingImport = null; render(); } }, "Cancel"),
         h("button", { class: "btn", type: "button", onclick: () => { Store.replaceAll(pendingImport); pendingImport = null; settingsMsg = "Restored from backup."; render(); } }, "Replace"))));
 
+
+    // Sync with Claude (Make)
+    if (window.Sync && !(window.claude && window.claude.use)) {
+      const si = Sync.info(), ago = si.lastOk ? new Date(si.lastOk).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "";
+      if (Sync.configured()) {
+        const auto = h("input", { type: "checkbox", id: "sAuto", onchange: () => { Store.setSettings({ syncAuto: auto.checked }); render(); } }); auto.checked = si.auto;
+        const used = si.opsUsed, pct = Math.min(100, Math.round(used / si.opsLimit * 100));
+        out.push(h("section", { class: "card" }, h("h3", null, "Synced with Claude"),
+          h("p", { class: "hint" }, "Your plan is mirrored to your Make account. Tell Claude in any chat to check Cadence and it reads your plan, and changes it makes show up here."),
+          h("p", { class: "status", role: "status" }, si.status === "syncing" ? "Syncing…" : si.status === "error" ? si.message : (si.message || "Ready.") + (ago ? " Last sync " + ago + "." : "")),
+          h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => Sync.now() }, "Sync now"),
+            h("button", { class: "btn ghost", type: "button", onclick: () => { if (confirm("Stop syncing on this phone? Your plan stays here and in Make.")) { Sync.disconnect(); render(); } } }, "Disconnect")),
+          h("div", { class: "switch" }, h("label", { for: "sAuto", style: "color:var(--ink);font-size:16px" }, "Sync automatically"), auto),
+          h("p", { class: "small muted" }, `Free Make plan: about ${used} of ${si.opsLimit} operations used this period (estimate). Auto-sync pauses near the limit; Sync now still works.` + (pct >= 80 ? " You’re close." : ""))));
+      } else {
+        const code = h("input", { type: "text", id: "sCode", placeholder: "Paste setup link or code", autocomplete: "off", spellcheck: "false" });
+        const m = h("p", { class: "status", role: "status" }, "");
+        out.push(h("section", { class: "card" }, h("h3", null, "Sync with Claude"),
+          h("p", { class: "hint" }, "Connect Cadence to your Make account so Claude can read and update your plan from any chat, and your changes reach Claude. Open the setup link Claude gave you, or paste the code here."),
+          h("label", { for: "sCode" }, "Setup code", code),
+          h("button", { class: "btn", type: "button", onclick: () => { if (Sync.connect(code.value)) { render(); toast("Sync connected"); } else m.textContent = "That doesn’t look like a setup link or code."; } }, "Connect"),
+          m));
+      }
+    }
+
     // Claude settings
     if (Claude.source() === "claude") {
       const auto = h("input", { type: "checkbox", id: "kAuto", onchange: () => { Store.setSettings({ auto: auto.checked }); } }); auto.checked = c.auto;
@@ -396,7 +422,7 @@
         c.apiKey ? h("button", { class: "link warn", type: "button", onclick: () => { Store.setSettings({ apiKey: "" }); toast("Key removed from this phone."); render(); } }, "Remove key from this phone") : null,
         h("p", { class: "small muted" }, "The key stays on this phone and is only sent to Anthropic. Backups never include it.")));
     }
-    out.push(h("p", { class: "small muted", style: "text-align:center" }, "Cadence · v1"));
+    out.push(h("p", { class: "small muted", style: "text-align:center" }, "Cadence · v2"));
     return out;
   }
 
@@ -417,6 +443,7 @@
   });
 
   Store.subscribe(() => render());
+  if (window.Sync) Sync.onChange(() => { if (tab === "settings") render(); });
   Claude.onReady(() => render());
 
   // Cloud sync (only inside a published Claude artifact, where the `db` capability exists).
