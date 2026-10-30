@@ -22,3 +22,12 @@ Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Setti
 ## Not built yet
 - Plus menu / five tabs, attachments inside "What are we doing today?", Inbox, month view, nudges,
   AI layer (Claude reads attachments, proposes plans), WhatsApp, chief-of-staff structure.
+
+## Decided for 2B (not built yet, agreed 30 Oct)
+- Five bottom tabs, each with an icon above its label: Today, Plan, + (middle), Ventures, Settings (gear). Fourth tab to be confirmed.
+- Middle + button opens: What are we doing today? (voice/typing), Add task, Attach.
+- Inbox moves out of the tabs: a message icon at the top right with a count badge when there is something waiting.
+- Settings is its own page: How we plan, Connections (Make, Notion, AI), Notifications, Your data (backup: export/import only), About.
+- Connections are off by default, show what they do/cost/send, keep keys on the phone only, have Test and Disconnect. AI gets a visible on/off and spending cap.
+- Version scheme: named release plus build counter, shown as "CDNC 2A · build N" (in progress: "2B (in progress) · build N"). Record it in memory once the deck is updated.
+- Attachments: saved on the phone first; reading them waits for the AI layer.
