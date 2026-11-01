@@ -2,6 +2,10 @@
 
 Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Settings).
 
+## Update 2B, step 2 (on branch sync-on, not live) · build 13
+- Make sync switched on in the app (Settings → Connections). Setup by link or code; max 3 auto syncs a day.
+- Maker tag is now "Numa Works".
+
 ## Update 2B: Today dashboard (build 11, folded into build 12)
 - Your day: set blocked time, work and "your time" blocks once (Settings → Your day). Today shows them as a timeline with the time you can plan.
 - Check-in: energy, optional blocks (e.g. an evening window) switched on per day.

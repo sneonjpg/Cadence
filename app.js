@@ -12,7 +12,7 @@
   const shortDay = s => parse(s).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
 
   let tab = "today", selected = todayStr(), lastToday = todayStr();
-  const MAKER = "Neo Works";
+  const MAKER = "Numa Works";
   let setPage = null, inboxTab = "approvals", planStart = null;
   let confirmId = null, editV = null, confirmVRemove = null, pendingImport = null, settingsMsg = "";
   let coach = null;              // { text, status: "loading" | "ok" | "err" }
@@ -875,13 +875,13 @@
     ["day", "Your day", () => { const n = Store.getRhythm().length; return n ? n + (n === 1 ? " block" : " blocks") + " · Day code" : "Not set up yet"; }],
     ["conn", "Connections", () => (Claude.live() ? "Claude is on" : "All off") + " · keys stay on this phone"],
     ["data", "Your data", () => { const s = Store.getSettings(); return s.lastExport ? "Last export " + new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "Export and import"; }],
-    ["about", "About", () => "CDNC 2B (in progress) · build 12"]];
+    ["about", "About", () => "CDNC 2B (in progress) · build 13"]];
   function viewSettings() {
     if (!setPage) {
       const s = Store.getSettings();
       return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
         h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
-        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), h("p", { class: "makertag" }, s.maker || MAKER))];
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 13"), h("p", { class: "makertag" }, s.maker || MAKER))];
     }
     const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
     return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
@@ -968,7 +968,7 @@
     P(rhythmCard());
 
     cur = "conn";
-    // Sync with Claude (Make): hidden in this version; the sync script is not loaded.
+    // Sync with Claude (Make): shown now that sync.js is loaded.
     if (window.Sync && !(window.claude && window.claude.use)) {
       const si = Sync.info(), ago = si.lastOk ? new Date(si.lastOk).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "";
       if (Sync.configured()) {
@@ -1029,7 +1029,7 @@
     cur = "about";
     const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: MAKER, value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
     P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. Leave it empty to show “" + MAKER + "”."), h("label", { for: "sMaker" }, "Your tag", maker)));
-    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 12"), h("p", { class: "makertag" }, s.maker || MAKER)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 13"), h("p", { class: "makertag" }, s.maker || MAKER)));
     return groups;
   }
 
