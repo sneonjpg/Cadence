@@ -2,6 +2,9 @@
 
 Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Settings).
 
+## Update 2B, step 3 (on branch dashboard-pop, not live) · build 14
+- Floating Dashboard pop-up: a pill above the tabs opens your private dashboard page in a panel; minimise it to a tab on the left or right edge, move it to the other side, or close it. The link is saved only on the phone.
+
 ## Update 2B, step 2 (on branch sync-on, not live) · build 13
 - Make sync switched on in the app (Settings → Connections). Setup by link or code; max 3 auto syncs a day.
 - Maker tag is now "Numa Works".
