@@ -232,3 +232,7 @@ html.booting #inbox, body.gated #inbox { visibility: hidden !important; }
 .daycard { background: var(--sf); border: 1px solid var(--ln); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; } .daycard.today { border-color: var(--gr); } .daycard .dh { display: flex; justify-content: space-between; align-items: center; background: none; border: 0; padding: 4px 0; min-height: 44px; width: 100%; text-align: left; font-size: 16px; } .daycard .dayline { display: flex; align-items: center; gap: 8px; font-size: 15px; padding: 2px 0; } .daycard .dayline i { width: 8px; height: 8px; border-radius: 50%; background: var(--gr); flex: none; } .daycard .dayline.dn { text-decoration: line-through; color: var(--mu); }
 
 .need { outline: 2px solid var(--gold, #C9A24A); outline-offset: 2px; border-radius: 10px; }
+
+.scrim.chatscrim { bottom: calc(88px + env(safe-area-inset-bottom)); background: transparent; }
+.chatscrim .sheet { max-height: calc(100dvh - 120px - env(safe-area-inset-bottom)); border-radius: 14px; border: 1px solid var(--ln); box-shadow: 0 -4px 24px rgba(0,0,0,.18); }
+body.chatopen { overflow: hidden; }

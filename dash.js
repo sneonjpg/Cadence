@@ -31,7 +31,14 @@
   #dash .dbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--ln);background:var(--bg)}
   #dash .dbar b{flex:1;font-size:14px}
   #dash .dbar button,#dash .dbar a{min-width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--gr);font-size:16px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:0 8px}
-  #dash iframe{flex:1;border:0;width:100%;background:#fff}
+  #dash .dnative{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+  #dash .dstats{display:flex;gap:16px;font-size:14px}#dash .dstats b{font-size:20px;font-family:inherit}
+  #dash .dcard{border:1px solid var(--ln);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--bg);border-left:4px solid var(--gold,#C9A24A)}
+  #dash .dcard.p1{border-left-color:#B5603E}#dash .dcard.p3{border-left-color:var(--ln)}
+  #dash .dt{font-weight:600;font-size:15px}#dash .dm{font-size:12px;opacity:.7}
+  #dash .dcard input{font:inherit;font-size:14px;padding:8px;border:1px solid var(--ln);border-radius:8px;background:var(--sf);color:var(--ink);width:100%}
+  #dash .dacts{display:flex;gap:8px}#dash .dacts button{flex:1;font:inherit;font-weight:600;padding:10px;border-radius:10px;border:1px solid var(--ln);background:var(--sf);color:var(--ink);min-height:44px}#dash .dacts .ok{background:var(--gr);color:var(--bg);border-color:var(--gr)}
+  #dash .dlink{font:inherit;font-size:14px;color:var(--gr);background:none;border:none;text-align:left;padding:4px 0;text-decoration:underline}
   #dash .dsetup{padding:16px;display:flex;flex-direction:column;gap:10px;font-size:14px;overflow-y:auto}
   #dash .dsetup input{font:inherit;padding:10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
   #dash .dsetup button{font:inherit;font-weight:600;padding:10px 14px;border-radius:10px;border:none;background:var(--gr);color:var(--bg);min-height:44px}
@@ -54,16 +61,31 @@
       el("button", { type: "button", "aria-label": "Minimise to the side", title: "Minimise to the side", onclick: () => set({ mode: "min" }) }, "–"),
       el("button", { type: "button", "aria-label": "Close", title: "Close", onclick: () => set({ mode: "pill" }) }, "×"));
     const panel = el("div", { class: "dpanel", role: "dialog", "aria-label": "Dashboard" }, bar);
-    if (okUrl(st.url)) {
-      panel.append(el("iframe", { src: st.url, title: "Dashboard", referrerpolicy: "no-referrer", allow: "microphone" }));
-    } else {
-      const inp = el("input", { type: "text", placeholder: "Paste your dashboard link (https://…)", autocomplete: "off", spellcheck: "false", "aria-label": "Dashboard link" });
-      const msg = el("p", { class: "small muted" }, "");
-      panel.append(el("div", { class: "dsetup" },
-        el("p", {}, "Add the link to your private dashboard page. It is saved only on this phone."), inp,
-        el("button", { type: "button", onclick: () => { const v = inp.value.trim(); if (okUrl(v)) set({ url: v }); else msg.textContent = "That doesn’t look like a web link."; } }, "Save link"), msg));
-    }
+    const body = el("div", { class: "dnative" }); panel.append(body); paintNative(body);
     root.append(panel);
   }
+  /* The dashboard is built into the app now: it shows your approvals live from your synced plan. No link needed. */
+  const ESC = v => String(v == null ? "" : v);
+  function paintNative(body) {
+    const st2 = Store.get(), list = st2.tasks.filter(t => t.needsApproval && !t.done && !t.decision).sort((a, b) => (a.priority || 2) - (b.priority || 2));
+    const today = new Date(), ymd = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+    const todays = st2.tasks.filter(t => t.day === ymd), doneN = todays.filter(t => t.done).length;
+    const vname = id => { const v = st2.ventures.find(x => x.id === id); return v ? v.name : id; };
+    body.textContent = "";
+    body.append(el("div", { class: "dstats" }, el("div", {}, el("b", {}, String(list.length)), el("span", {}, " waiting for your OK")), el("div", {}, el("b", {}, doneN + "/" + todays.length), el("span", {}, " done today"))));
+    if (window.Sync && Sync.configured && Sync.configured()) body.append(el("button", { class: "dlink", type: "button", onclick: () => Sync.now() }, "Sync now with the dashboard and Claude"));
+    if (!list.length) body.append(el("p", { class: "small muted" }, "Nothing is waiting for your OK."));
+    list.forEach(t => {
+      const note = el("input", { type: "text", placeholder: "What should change? (for Needs changes)", "aria-label": "What should change", maxlength: "500" });
+      body.append(el("div", { class: "dcard p" + (t.priority || 2) },
+        el("div", { class: "dt" }, ESC(t.title)), el("div", { class: "dm" }, vname(t.venture) + (t.day ? " · " + t.day : "")),
+        note,
+        el("div", { class: "dacts" },
+          el("button", { type: "button", class: "ok", onclick: () => Store.updateTask(t.id, { needsApproval: false, decision: "approved", decidedAt: new Date().toISOString(), done: true }) }, "Approve"),
+          el("button", { type: "button", onclick: () => { Store.updateTask(t.id, { needsApproval: false, decision: "changes", decidedAt: new Date().toISOString(), changeNote: note.value.trim().slice(0, 500) }); } }, "Needs changes"))));
+    });
+    if (st.url) body.append(el("a", { class: "dlink", href: st.url, target: "_blank", rel: "noopener" }, "Open the full dashboard page ↗"));
+  }
+  Store.subscribe(() => { if (st.mode === "open") { const b = root.querySelector(".dnative"); if (b) paintNative(b); } });
   draw();
 })();

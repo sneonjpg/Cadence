@@ -2,6 +2,12 @@
 
 Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Settings).
 
+## Update 2B, step 6 (on branch fix-open, not live) · build 17
+- Dashboard now lives inside the app: the pill opens a native panel with your waiting approvals (Approve / Needs changes), done-today count and Sync now. No link needed.
+- Chat and voice keep the tab bar and the Cadence button at the bottom; tap Cadence during a chat to speak your next message.
+- Opening the app again within 4 hours skips the splash screen.
+- Updates now arrive on the next open (network-first for app files) instead of the second open.
+
 ## Update 2B, step 5 (on branch voice-auto, not live) · build 16
 - Hands-free voice: Cadence stops listening when you pause (about 1.6 s), then acts. A question or search goes to Ask Cadence and answers in writing. Tasks open already filled in (priority and place guessed from your words); highlighted fields are the only bits left, and Add is one tap.
 

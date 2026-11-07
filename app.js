@@ -74,6 +74,7 @@
     const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true" });
     sheet.append(h("div", { class: "grab" }));
     build(sheet);
+    if (sheet.dataset.chat) { scrim.classList.add("chatscrim"); document.body.classList.add("chatopen"); }
     scrim.append(sheet); $("sheetRoot").append(scrim);
     document.body.classList.add("lock");
     if (!sheetOpen) { sheetOpen = true; try { history.pushState({ sheet: 1 }, ""); } catch (e) {} }
@@ -81,7 +82,7 @@
   }
   function closeSheet(silent) {
     if (activeRec) { try { activeRec.stop(); } catch (e) {} activeRec = null; }
-    $("sheetRoot").replaceChildren(); document.body.classList.remove("lock"); chatBox = null;
+    $("sheetRoot").replaceChildren(); document.body.classList.remove("lock", "chatopen"); chatBox = null;
     if (sheetOpen && !silent) { sheetOpen = false; try { history.back(); } catch (e) {} }
   }
   window.addEventListener("popstate", () => { if (sheetOpen) { sheetOpen = false; closeSheet(true); } });
@@ -202,6 +203,7 @@
   function openChat(prefill) {
     const live = Claude.live();
     openSheet(sheet => {
+      sheet.dataset.chat = "1";
       sheet.append(h("div", { class: "ghead" }, h("h2", null, "Claude"), h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => closeSheet() }, "×")));
       if (!live) {
         sheet.append(
@@ -908,13 +910,13 @@
     ["day", "Your day", () => { const n = Store.getRhythm().length; return n ? n + (n === 1 ? " block" : " blocks") + " · Day code" : "Not set up yet"; }],
     ["conn", "Connections", () => (Claude.live() ? "Claude is on" : "All off") + " · keys stay on this phone"],
     ["data", "Your data", () => { const s = Store.getSettings(); return s.lastExport ? "Last export " + new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "Export and import"; }],
-    ["about", "About", () => "CDNC 2B (in progress) · build 16"]];
+    ["about", "About", () => "CDNC 2B (in progress) · build 17"]];
   function viewSettings() {
     if (!setPage) {
       const s = Store.getSettings();
       return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
         h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
-        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 16"), h("p", { class: "makertag" }, s.maker || MAKER))];
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 17"), h("p", { class: "makertag" }, s.maker || MAKER))];
     }
     const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
     return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
@@ -1066,7 +1068,7 @@
     cur = "about";
     const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: MAKER, value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
     P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. Leave it empty to show “" + MAKER + "”."), h("label", { for: "sMaker" }, "Your tag", maker)));
-    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 16"), h("p", { class: "makertag" }, s.maker || MAKER)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 17"), h("p", { class: "makertag" }, s.maker || MAKER)));
     return groups;
   }
 
@@ -1080,9 +1082,9 @@
     if (tab === "today") { clearTimeout(popTimer); popTimer = setTimeout(maybePop, 350); }
     document.querySelectorAll("#tabs button[data-tab]").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
-  document.querySelectorAll("#tabs button[data-tab]").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; editV = null; setPage = null; window.scrollTo(0, 0); render(); }));
-  $("inbox").addEventListener("click", () => { tab = "inbox"; inboxTab = "approvals"; window.scrollTo(0, 0); render(); });
-  $("cad").addEventListener("click", () => openCadence());
+  document.querySelectorAll("#tabs button[data-tab]").forEach(b => b.addEventListener("click", () => { if (document.body.classList.contains("chatopen")) closeSheet(); tab = b.dataset.tab; editV = null; setPage = null; window.scrollTo(0, 0); render(); }));
+  $("inbox").addEventListener("click", () => { if (document.body.classList.contains("chatopen")) closeSheet(); tab = "inbox"; inboxTab = "approvals"; window.scrollTo(0, 0); render(); });
+  $("cad").addEventListener("click", () => { if (document.body.classList.contains("chatopen")) openCapture(false, true); else openCadence(); });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     const t = todayStr();
