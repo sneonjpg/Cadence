@@ -2,6 +2,9 @@
 
 Live at https://sneonjpg.github.io/Cadence/ (builds shown at the bottom of Settings).
 
+## Update 2B, step 5 (on branch voice-auto, not live) · build 16
+- Hands-free voice: Cadence stops listening when you pause (about 1.6 s), then acts. A question or search goes to Ask Cadence and answers in writing. Tasks open already filled in (priority and place guessed from your words); highlighted fields are the only bits left, and Add is one tap.
+
 ## Update 2B, step 4 (on branch ai-web, not live) · build 15
 - Ask Cadence: chat can now search the web (your Anthropic key, up to 3 searches a message, toggle in Settings → Connections) and gives fuller answers. New "Ask Cadence" button in the Cadence sheet.
 

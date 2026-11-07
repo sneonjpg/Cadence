@@ -663,6 +663,27 @@
     return out;
   }
 
+  /* ---------- hands-free capture: stop on silence, then decide what you meant ---------- */
+  function intentOf(text) {
+    const s = String(text || "").trim().toLowerCase();
+    const taskCue = /^(add|remind|schedule|send|call|book|buy|finish|write|email|review|prepare|plan|draft|post|pay|follow up|set up|organi[sz]e|clean|pick up|drop off)\b|\bremind me\b|\badd (a |an )?(task|reminder)\b|\b(at|by) \d{1,2}(:\d\d)?\s?(am|pm)?\b.*\b(for|to)\b/;
+    const askCue = /^(what|what's|whats|who|whom|whose|when|where|why|how|which|is|are|was|were|can|could|should|would|does|do|did|will|tell me|find|search|look up|google|explain|give me|show me|compare|suggest|recommend|summari[sz]e|define)\b/;
+    if (taskCue.test(s) && !/\?\s*$/.test(s)) return "task";
+    if (/\bremind me\b/.test(s)) return "task";
+    return askCue.test(s) || /\?\s*$/.test(s) ? "ask" : "task";
+  }
+  function guessPriority(title) {
+    const s = String(title || "").toLowerCase();
+    if (/\b(urgent|asap|important|critical|must|deadline|today)\b/.test(s)) return "1";
+    if (/\b(whenever|someday|low priority|if there'?s time|when there'?s room)\b/.test(s)) return "3";
+    return "2";
+  }
+  function guessHome(title) {
+    const s = String(title || "").toLowerCase();
+    const hit = ventures().filter(v => v.tier !== "parked").find(v => v.name.toLowerCase().split(/[^a-z0-9]+/).some(w => w.length >= 4 && s.includes(w)));
+    return hit ? hit.id : "";
+  }
+
   function openCapture(first, autoMic) {
     const pref = Store.getSettings().input || "both";
     openSheet(sheet => {
@@ -678,8 +699,14 @@
       const next = h("button", { class: "btn", type: "button", disabled: true }, "Next");
       const check = () => { next.disabled = !ta.value.trim(); };
       ta.addEventListener("input", check);
-      let wantOn = false, fatal = false, quick = 0;
-      const stopMic = () => { wantOn = false; if (activeRec) { try { activeRec.stop(); } catch (e) {} } };
+      let wantOn = false, fatal = false, quick = 0, silenceT = null;
+      const stopMic = () => { wantOn = false; clearTimeout(silenceT); if (activeRec) { try { activeRec.stop(); } catch (e) {} } };
+      const route = () => {                     // you stopped talking: act on it, no Next needed
+        const text = ta.value.trim(); if (!text) return;
+        stopMic();
+        if (intentOf(text) === "ask") { openChat(text); return; }
+        review(parseDay(text), true);
+      };
       const begin = () => {
         const rec = new SR(); activeRec = rec; rec.lang = "en-ZA"; rec.interimResults = true; rec.continuous = true;
         const startedAt = Date.now(); let gotSpeech = false;
@@ -698,6 +725,7 @@
             else out.push(t);
           }
           ta.value = baseText + out.join(" "); check();
+          clearTimeout(silenceT); if (ta.value.trim()) silenceT = setTimeout(route, 1600);
         };
         rec.onerror = e => {
           if (e.error === "not-allowed" || e.error === "service-not-allowed") { fatal = true; note.textContent = "The microphone is blocked. Allow it in Chrome’s site settings, or type instead."; }
@@ -715,7 +743,7 @@
         rec.start();
       };
       mic.addEventListener("click", () => {
-        if (listening) { stopMic(); return; }
+        if (listening) { stopMic(); route(); return; }
         try { fatal = false; quick = 0; wantOn = true; begin(); listening = true; setMic(true); note.textContent = ""; }
         catch (e) { wantOn = false; note.textContent = "Voice isn’t available here. Typing works fine."; }
       });
@@ -732,7 +760,7 @@
       };
       next.addEventListener("click", () => { stopMic(); review(parseDay(ta.value)); });
 
-      const review = proposals => {
+      const review = (proposals, heard) => {
         if (!proposals.length) proposals = [{ title: "", start: "", mins: 0 }];
         const fresh = isFresh();
         const dayIn = h("input", { type: "date", id: "rDay", value: selected });
@@ -745,12 +773,15 @@
             h("div", { class: "fields" }, h("label", null, "Priority", r.pri), h("label", null, "Where it belongs", r.home.el), h("label", null, "Start (optional)", r.st), h("label", null, "Length (optional)", r.len)));
           return r;
         });
+        rows.forEach((r, i) => { r.pri.value = guessPriority(proposals[i].title); const g = guessHome(proposals[i].title); if (g) r.home.sel.value = g; });
         const go = h("button", { class: "btn", type: "button" }, "Add tasks");
+        const lead = h("p", { class: "hint" }, "");
         const validate = () => {
           const picked = rows.filter(r => r.on.checked);
           const ok = picked.length && picked.every(r => r.title.value.trim() && r.pri.value && r.home.valid());
           go.disabled = !ok; go.textContent = picked.length ? "Add " + picked.length + (picked.length === 1 ? " task" : " tasks") : "Add tasks";
-          rows.forEach(r => r.card.classList.toggle("off", !r.on.checked));
+          rows.forEach(r => { r.card.classList.toggle("off", !r.on.checked); r.home.el.classList.toggle("need", r.on.checked && !r.home.valid()); r.pri.classList.toggle("need", r.on.checked && !r.pri.value); });
+          lead.textContent = ok ? (heard ? "Got it. Tap Add if that’s right, or change anything first." : "Check each one, then tap Add.") : "Nearly there. Just the highlighted bits to fill in.";
         };
         rows.forEach(r => { r.on.addEventListener("change", validate); r.title.addEventListener("input", validate); r.pri.addEventListener("change", validate); r.home.onChange(validate); });
         allPri.addEventListener("change", () => { if (allPri.value) rows.forEach(r => { r.pri.value = allPri.value; }); validate(); });
@@ -769,7 +800,7 @@
         });
         fill(body, 
           h("div", { class: "ghead" }, h("h2", null, "Here’s what we heard"), h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => closeSheet() }, "×")),
-          h("p", { class: "hint" }, "Check each one. Every task needs a priority and a place to belong. Untick anything that isn’t a task."),
+          lead,
           proposals.length > 1 ? h("div", { class: "rowcard all" }, h("div", { class: "fields" }, h("label", null, "Same priority for all", allPri), h("label", null, "Same place for all", allHome.el))) : null,
           h("label", null, "Day", dayIn), rows.map(r => r.card), go,
           h("button", { type: "button", class: "link", onclick: showInput }, "Back"));
@@ -877,13 +908,13 @@
     ["day", "Your day", () => { const n = Store.getRhythm().length; return n ? n + (n === 1 ? " block" : " blocks") + " · Day code" : "Not set up yet"; }],
     ["conn", "Connections", () => (Claude.live() ? "Claude is on" : "All off") + " · keys stay on this phone"],
     ["data", "Your data", () => { const s = Store.getSettings(); return s.lastExport ? "Last export " + new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "Export and import"; }],
-    ["about", "About", () => "CDNC 2B (in progress) · build 15"]];
+    ["about", "About", () => "CDNC 2B (in progress) · build 16"]];
   function viewSettings() {
     if (!setPage) {
       const s = Store.getSettings();
       return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
         h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
-        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 15"), h("p", { class: "makertag" }, s.maker || MAKER))];
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 16"), h("p", { class: "makertag" }, s.maker || MAKER))];
     }
     const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
     return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
@@ -1035,7 +1066,7 @@
     cur = "about";
     const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: MAKER, value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
     P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. Leave it empty to show “" + MAKER + "”."), h("label", { for: "sMaker" }, "Your tag", maker)));
-    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 15"), h("p", { class: "makertag" }, s.maker || MAKER)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 16"), h("p", { class: "makertag" }, s.maker || MAKER)));
     return groups;
   }
 
