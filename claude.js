@@ -17,6 +17,9 @@ window.Claude = (function () {
     "If the user asks a question or asks you to break a task down, answer fully but keep it tight and practical. Never invent tasks or ventures that are not in the state."
   ].join(" ");
 
+  const CHAT_NOTE = " In chat the person may ask you anything, not only about the plan: answer fully and practically (a short paragraph or a few short lines, still plain text, no markdown). You may suggest tasks, but the person adds them.";
+  const WEB_NOTE = " You can search the web for current facts. Use it only when the answer needs up-to-date or outside information, and say where it came from in a few words.";
+
   // Inside a published Claude artifact, the viewer's own Claude account answers (the `sample`
   // capability), so no API key is needed. Anywhere else, an optional API key works instead.
   let sampleFn = null;
@@ -29,7 +32,7 @@ window.Claude = (function () {
 
   const cfg = () => {
     const s = Store.getSettings();
-    return { apiKey: s.apiKey || "", model: s.model || DEFAULT_MODEL, auto: s.auto !== false };
+    return { apiKey: s.apiKey || "", model: s.model || DEFAULT_MODEL, auto: s.auto !== false, web: s.web !== false };
   };
   const source = () => sampleFn ? "claude" : cfg().apiKey ? "key" : "none";
   const live = () => source() !== "none";
@@ -64,7 +67,8 @@ window.Claude = (function () {
 
   function messageFor(event) { return "PLANNER STATE\n" + snapshot() + "\n\nWHAT JUST HAPPENED\n" + event; }
 
-  async function send(messages) {
+  async function send(messages, opts) {
+    opts = opts || {};
     if (sampleFn) {
       try {
         const turns = [{ role: "user", content: "STANDING INSTRUCTIONS (always follow): " + SYSTEM }].concat(messages);
@@ -80,23 +84,34 @@ window.Claude = (function () {
     }
     const c = cfg();
     if (!c.apiKey) throw Object.assign(new Error("no-key"), { code: "no-key" });
-    let res;
-    try {
-      res = await fetch(API, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json", "x-api-key": c.apiKey,
-          "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"
-        },
-        body: JSON.stringify({ model: c.model, max_tokens: 400, system: SYSTEM, messages })
-      });
-    } catch (e) { throw Object.assign(new Error("offline"), { code: "offline" }); }
-    let body = null; try { body = await res.json(); } catch (e) {}
-    if (!res.ok) {
-      const msg = (body && body.error && body.error.message) || ("HTTP " + res.status);
-      throw Object.assign(new Error(msg), { code: res.status === 401 ? "bad-key" : res.status === 429 ? "rate" : "api" });
+    const useWeb = !!opts.web && c.web;
+    const call = async msgs => {
+      let res;
+      try {
+        res = await fetch(API, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json", "x-api-key": c.apiKey,
+            "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"
+          },
+          body: JSON.stringify(Object.assign({ model: c.model, max_tokens: opts.long ? 1200 : 400, system: SYSTEM + (opts.long ? CHAT_NOTE + (useWeb ? WEB_NOTE : "") : ""), messages: msgs },
+            useWeb ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }] } : {}))
+        });
+      } catch (e) { throw Object.assign(new Error("offline"), { code: "offline" }); }
+      let body = null; try { body = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        const msg = (body && body.error && body.error.message) || ("HTTP " + res.status);
+        throw Object.assign(new Error(msg), { code: res.status === 401 ? "bad-key" : res.status === 429 ? "rate" : "api" });
+      }
+      return body;
+    };
+    let body = await call(messages), text = "";
+    for (let i = 0; i < 2 && body.stop_reason === "pause_turn"; i++) {       // a long search: let it carry on
+      text += (body.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+      body = await call(messages.concat([{ role: "assistant", content: body.content }]));
     }
-    return ((body.content || []).filter(b => b.type === "text").map(b => b.text).join("\n") || "").trim();
+    text += (body.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    return text.trim();
   }
 
   function friendly(e) {

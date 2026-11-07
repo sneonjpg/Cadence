@@ -16,6 +16,7 @@
   let setPage = null, inboxTab = "approvals", planStart = null;
   let confirmId = null, editV = null, confirmVRemove = null, pendingImport = null, settingsMsg = "";
   let coach = null;              // { text, status: "loading" | "ok" | "err" }
+  let chatMode = false;
   let convo = [];                // messages sent to the API
   let chatLog = [];              // what the chat sheet shows
   let inflight = 0, chain = Promise.resolve();
@@ -50,7 +51,7 @@
   function ask(content) {
     const run = async () => {
       convo.push({ role: "user", content }); trimConvo();
-      try { const text = await Claude.send(convo.slice()); convo.push({ role: "assistant", content: text }); return text; }
+      try { const text = await Claude.send(convo.slice(), chatMode ? { long: true, web: true } : undefined); convo.push({ role: "assistant", content: text }); return text; }
       catch (e) { convo.pop(); throw e; }
     };
     const p = chain.then(run, run);
@@ -213,7 +214,7 @@
       chatBox = h("div", { class: "chat", "aria-live": "polite" });
       const paint = () => {
         chatBox.replaceChildren();
-        if (!chatLog.length) chatBox.append(h("p", { class: "hint" }, "Ask anything about today, or say “break down my P1s”. I can see your tasks and ventures."));
+        if (!chatLog.length) chatBox.append(h("p", { class: "hint" }, "Ask me anything: plan your day, break down a task, or look something up on the web. I can see your tasks and ventures."));
         chatLog.slice(-20).forEach(m => chatBox.append(h("div", { class: "msg " + (m.who === "me" ? "me" : "ai") + (m.err ? " err" : "") }, m.text)));
         chatBox.scrollTop = chatBox.scrollHeight;
       };
@@ -224,9 +225,10 @@
         text = (text || "").trim(); if (!text) return;
         input.value = ""; chatLog.push({ who: "me", text }); chatLog.push({ who: "ai", text: "…" }); paint(); sendBtn.disabled = true;
         const slot = chatLog.length - 1;
+        chatMode = true;
         try { const r = await ask(Claude.messageFor("The user says: " + text)); chatLog[slot] = { who: "ai", text: r }; coach = { text: r, status: "ok" }; }
         catch (e) { chatLog[slot] = { who: "ai", text: Claude.friendly(e), err: true }; }
-        if (chatBox) paint(); sendBtn.disabled = false; if (tab === "today") render();
+        chatMode = false; if (chatBox) paint(); sendBtn.disabled = false; if (tab === "today") render();
       };
       sheet.append(chatBox, h("form", { class: "composer", onsubmit: e => { e.preventDefault(); submit(input.value); } }, input, sendBtn));
       if (prefill) submit(prefill);
@@ -875,13 +877,13 @@
     ["day", "Your day", () => { const n = Store.getRhythm().length; return n ? n + (n === 1 ? " block" : " blocks") + " · Day code" : "Not set up yet"; }],
     ["conn", "Connections", () => (Claude.live() ? "Claude is on" : "All off") + " · keys stay on this phone"],
     ["data", "Your data", () => { const s = Store.getSettings(); return s.lastExport ? "Last export " + new Date(s.lastExport).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "Export and import"; }],
-    ["about", "About", () => "CDNC 2B (in progress) · build 14"]];
+    ["about", "About", () => "CDNC 2B (in progress) · build 15"]];
   function viewSettings() {
     if (!setPage) {
       const s = Store.getSettings();
       return [h("header", null, h("p", { class: "eyebrow" }, "CDNC"), h("h1", null, "Settings")),
         h("div", { class: "menu" }, SET_PAGES.map(p => h("button", { type: "button", class: "menurow", onclick: () => { setPage = p[0]; window.scrollTo(0, 0); render(); } }, h("span", null, h("b", null, p[1]), h("small", null, p[2]())), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
-        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 14"), h("p", { class: "makertag" }, s.maker || MAKER))];
+        h("div", { class: "verfoot", style: "margin-top:18px" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 15"), h("p", { class: "makertag" }, s.maker || MAKER))];
     }
     const g = settingsGroups(), pg = SET_PAGES.find(p => p[0] === setPage);
     return [h("header", null, h("button", { type: "button", class: "backlink", onclick: () => { setPage = null; window.scrollTo(0, 0); render(); } }, "‹ Settings"), h("h1", null, pg ? pg[1] : "Settings")), ...(g[setPage] || [])];
@@ -929,6 +931,7 @@
         h("button", { type: "button", class: "big", onclick: () => openCapture(false, true) }, h("img", { src: "icons/icon-192.png", alt: "" }), h("span", null, h("b", null, "Tap to speak"), h("small", null, "Tell me the lot. I’ll turn it into tasks you approve."))),
         h("div", { class: "cadopts" },
           opt("Type it", () => openCapture(false, false), '<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
+          opt("Ask Cadence", () => openChat(), '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.3A8 8 0 1 1 21 12z"/>'),
           opt("One task", () => openAdd(), '<path d="M12 5v14M5 12h14"/>'),
           opt("Check in", () => { if (!Day.hasRhythm()) { closeSheet(); toast("Set up your day first, in Settings."); return; } Store.setCheckin(todayStr(), { seen: false }); selected = todayStr(); tab = "today"; closeSheet(); render(); }, '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')),
         h("p", { class: "hint" }, "Everything you add starts here. Today only shows and decides."));
@@ -1003,9 +1006,10 @@
       const key = h("input", { type: "password", id: "kKey", placeholder: c.apiKey ? "Key saved. Paste a new one to replace" : "sk-ant-…", autocomplete: "off", spellcheck: "false" });
       const model = h("input", { type: "text", id: "kModel", value: c.model, autocomplete: "off" });
       const auto = h("input", { type: "checkbox", id: "kAuto" }); auto.checked = c.auto;
+      const web = h("input", { type: "checkbox", id: "kWeb" }); web.checked = c.web;
       const msg = h("p", { class: "status", role: "status" }, Claude.live() ? "Live replies are on." : "Live replies are off. Hand-off to claude.ai still works.");
       const saveCfg = () => {
-        const patch = { model: model.value.trim() || Claude.DEFAULT_MODEL, auto: auto.checked };
+        const patch = { model: model.value.trim() || Claude.DEFAULT_MODEL, auto: auto.checked, web: web.checked };
         if (key.value.trim()) patch.apiKey = key.value.trim();
         Store.setSettings(patch); key.value = ""; msg.textContent = "Saved."; toast("Claude settings saved."); render();
       };
@@ -1014,6 +1018,8 @@
         h("label", { for: "kKey" }, "API key", key),
         h("label", { for: "kModel" }, "Model", model),
         h("div", { class: "switch" }, h("label", { for: "kAuto", style: "color:var(--ink);font-size:16px" }, "Speak up as I work"), auto),
+        h("div", { class: "switch" }, h("label", { for: "kWeb", style: "color:var(--ink);font-size:16px" }, "Let Cadence search the web in chat"), web),
+        h("p", { class: "small muted" }, "Web search is billed to your key too (about 1 cent a search, up to 3 a message). Turn it off to stop it."),
         h("div", { class: "row" },
           h("button", { class: "btn", type: "button", onclick: saveCfg }, "Save"),
           h("button", { class: "btn ghost", type: "button", onclick: async e => {
@@ -1029,7 +1035,7 @@
     cur = "about";
     const maker = h("input", { type: "text", id: "sMaker", maxlength: "40", placeholder: MAKER, value: s.maker || "", autocomplete: "off", onchange: () => { Store.setSettings({ maker: maker.value.trim() }); toast("Saved."); render(); } });
     P(h("section", { class: "card" }, h("h3", null, "Maker tag"), h("p", { class: "hint" }, "Shown under the version. Leave it empty to show “" + MAKER + "”."), h("label", { for: "sMaker" }, "Your tag", maker)));
-    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 14"), h("p", { class: "makertag" }, s.maker || MAKER)));
+    P(h("div", { class: "verfoot" }, h("p", { class: "small muted" }, "CDNC 2B (in progress) · build 15"), h("p", { class: "makertag" }, s.maker || MAKER)));
     return groups;
   }
 
